@@ -10,8 +10,10 @@ on:
     branches:
       - main
 
+# Read-only: the baseline commit is pushed with the ratchet deploy key, not this token
+# (see scripts/push-ratchet-baseline.sh).
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: test-count-ratchet-main
@@ -24,8 +26,6 @@ jobs:
     timeout-minutes: 5
     if: "!contains(github.event.head_commit.message, '[skip ratchet]')"
     steps:
-      # The write-scoped token must not sit in .git/config while dependencies install; it's handed
-      # only to the final push step below.
       - uses: actions/checkout@v4
         with:
           ref: main
@@ -41,27 +41,11 @@ jobs:
       - name: Measure the test count and raise the baseline if it climbed
         run: npx tsx scripts/check-test-count.ts --update-if-higher
 
+      # The deploy key reaches only this step, never dependency installs.
       - name: Commit and push the baseline if it changed
         env:
+          RATCHET_DEPLOY_KEY: ${{ secrets.RATCHET_DEPLOY_KEY }}
           GITHUB_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          if git diff --quiet -- test-count-baseline.txt; then
-            echo "No test count increase to record."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add test-count-baseline.txt
-          git commit -m "chore: ratchet test count baseline [skip ratchet]" -m "$(git diff --cached -- test-count-baseline.txt)"
-          # coverage-ratchet.yml runs on the same push and may land first, as may another merge.
-          # The two baseline files never overlap, so rebasing this one-line commit onto the new
-          # main and retrying is safe; a genuine conflict still fails the job loudly.
-          remote="https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git"
-          for attempt in 1 2 3; do
-            if git push "$remote" HEAD:main; then exit 0; fi
-            echo "main moved since checkout (attempt ${attempt}); rebasing onto it and retrying."
-            git pull --rebase "$remote" main
-          done
-          echo "Could not push the raised baseline after 3 attempts." >&2
-          exit 1
+          bash scripts/push-ratchet-baseline.sh test-count-baseline.txt "chore: ratchet test count baseline [skip ratchet]"

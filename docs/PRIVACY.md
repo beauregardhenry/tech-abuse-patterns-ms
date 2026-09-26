@@ -96,7 +96,10 @@ The page also sets a strict **Content-Security-Policy**: same-origin scripts, st
 
 ## Build and CI hygiene that affects privacy
 
-- The ratchet workflows hold a write-scoped token so they can commit updated baselines. They check out with `persist-credentials: false` and pass the token only to the final push step. That keeps it out of `.git/config` while dependencies install and tests run.
+- Every workflow's Actions token is read-only. The ratchet workflows commit updated baselines with a dedicated write-enabled **deploy key** (secret `RATCHET_DEPLOY_KEY`). The key is handed only to the final push step (`scripts/push-ratchet-baseline.sh`), never to dependency installs or the test suite. It lives in a temp file only while that step runs.
+  - It's pushed over SSH against GitHub's published host keys, which are fetched over TLS rather than trusted on first contact.
+  - The key sits on `main`'s ruleset bypass list, so the baseline commit isn't blocked by the required CI check.
+  - `.github/workflows/verify-ratchet-key.yml` proves the key can push; run it manually after adding or rotating the key.
 - Every workflow installs with `npm ci --ignore-scripts`, so a compromised dependency's install script doesn't run in CI.
 
 ## What this does *not* cover yet
