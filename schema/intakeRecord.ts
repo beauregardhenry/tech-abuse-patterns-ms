@@ -46,6 +46,11 @@ export const OUTCOMES = ["safety_plan", "evidence_preserved", "protective_order_
 
 const QUARTER_PATTERN = /^\d{4}-Q[1-4]$/;
 
+// Upper bound on days_to_safety_plan. A placeholder pending partner input (see
+// docs/DECISIONS.md): it rejects garbage like 100000 at intake, so a single malformed record can't
+// sit at the extreme of a published statistic.
+export const MAX_DAYS_TO_SAFETY_PLAN = 365;
+
 export const IntakeRecordSchema = z
   .object({
     abuse_type: z.enum(ABUSE_TYPES),
@@ -53,10 +58,17 @@ export const IntakeRecordSchema = z
     platform: z.enum(PLATFORMS),
     region: z.enum(REGIONS),
     quarter: z.string().regex(QUARTER_PATTERN, "quarter must be formatted YYYY-Qn"),
-    outcome: z.array(z.enum(OUTCOMES)).max(OUTCOMES.length),
-    days_to_safety_plan: z.number().int().nonnegative().nullable(),
+    outcome: z
+      .array(z.enum(OUTCOMES))
+      .max(OUTCOMES.length)
+      .refine((outcomes) => new Set(outcomes).size === outcomes.length, "outcome must not repeat a value"),
+    days_to_safety_plan: z.number().int().nonnegative().max(MAX_DAYS_TO_SAFETY_PLAN).nullable(),
   })
-  .strict();
+  .strict()
+  .refine((r) => r.days_to_safety_plan === null || r.outcome.includes("safety_plan"), {
+    message: "days_to_safety_plan requires a safety_plan outcome",
+    path: ["days_to_safety_plan"],
+  });
 
 export type IntakeRecord = z.infer<typeof IntakeRecordSchema>;
 export type AbuseType = (typeof ABUSE_TYPES)[number];

@@ -1,5 +1,6 @@
 import {
   ABUSE_TYPES,
+  MAX_DAYS_TO_SAFETY_PLAN,
   OUTCOMES,
   PLATFORMS,
   REGIONS,
@@ -103,7 +104,10 @@ export function generateIntakeRecords(config: GenerateConfig): IntakeRecord[] {
     const hasSafetyPlan = outcome.includes("safety_plan");
     const days_to_safety_plan =
       hasSafetyPlan && !rng.chance(daysToSafetyPlan.missingRate)
-        ? Math.max(0, Math.round(daysToSafetyPlan.meanDays + (rng.next() - 0.5) * daysToSafetyPlan.meanDays * 2))
+        ? Math.min(
+            MAX_DAYS_TO_SAFETY_PLAN,
+            Math.max(0, Math.round(daysToSafetyPlan.meanDays + (rng.next() - 0.5) * daysToSafetyPlan.meanDays * 2)),
+          )
         : null;
 
     records.push({

@@ -1,127 +1,87 @@
+import { assertValidThreshold, augmentedLines, DEFAULT_SUPPRESSION_THRESHOLD, lineViolation, type Coord } from "./disclosure.js";
 import type { RawTable, SuppressedTable } from "./types.js";
 
-export const DEFAULT_SUPPRESSION_THRESHOLD = 11;
+/** Margins another table has already hidden, which this table must hide too (see runPipeline). */
+export interface ForcedMargins {
+  rowTotals?: readonly boolean[];
+  grandTotal?: boolean;
+}
 
 /**
- * Cell suppression for a 2-way table: primary suppression (rule 1) plus
- * complementary/secondary suppression against back-calculation from a
- * displayed row total, column total, or grand total (rule 2).
+ * Cell suppression for a 2-way table, totals included (see pipeline/disclosure.ts):
  *
- * Known limitation (see docs/PRIVACY.md): this protects against recovering
- * a single hidden cell from ONE margin (its row, its column, or the grand
- * total) at a time. It does not run a full linear-programming disclosure
- * audit across all possible combinations of margins in higher-dimensional
- * tables — that is a harder problem and is called out as an open item for
- * review with a statistician/the partner org before any real data is used.
+ *   1. Primary: every value -- cell, row total, column total, grand total -- from 1 to k-1 is
+ *      hidden. A genuine zero is never hidden.
+ *   2. Complementary: while any line of the augmented matrix discloses something (exactly one
+ *      hidden value, or hidden values whose derived sum is below k), hide one more of its values:
+ *      the smallest shown non-zero part, or the line's total if no part qualifies. Every shown
+ *      non-zero value is already >= k, so one addition always resolves the line it was chosen for.
+ *
+ * Each step hides one more value and the matrix is finite, so this always terminates.
+ *
+ * Known limitation (see docs/PRIVACY.md): this checks each line on its own. It does not run a full
+ * linear-programming audit over combinations of lines, which is the harder general problem.
  */
-export function suppressTable(raw: RawTable, k: number = DEFAULT_SUPPRESSION_THRESHOLD): SuppressedTable {
-  const numRows = raw.rowLabels.length;
-  const numCols = raw.colLabels.length;
+export function suppressTable(
+  raw: RawTable,
+  k: number = DEFAULT_SUPPRESSION_THRESHOLD,
+  forced: ForcedMargins = {},
+): SuppressedTable {
+  assertValidThreshold(k);
+  const R = raw.rowLabels.length;
+  const C = raw.colLabels.length;
 
-  const suppressed: boolean[][] = raw.matrix.map((row) => row.map((v) => v > 0 && v < k));
+  // Augmented matrix: cells, then row totals in column C, column totals in row R, grand total at [R][C].
+  const value: number[][] = raw.matrix.map((row) => [...row, row.reduce((a, b) => a + b, 0)]);
+  const colTotals = raw.colLabels.map((_, j) => raw.matrix.reduce((sum, row) => sum + row[j]!, 0));
+  value.push([...colTotals, colTotals.reduce((a, b) => a + b, 0)]);
 
-  const rowTotalsRaw = raw.matrix.map((row) => row.reduce((a, b) => a + b, 0));
-  const colTotalsRaw = raw.colLabels.map((_, j) => raw.matrix.reduce((a, row) => a + row[j]!, 0));
-  const grandTotalRaw = rowTotalsRaw.reduce((a, b) => a + b, 0);
-
-  const rowTotalSuppressed = rowTotalsRaw.map((v) => v > 0 && v < k);
-  const colTotalSuppressed = colTotalsRaw.map((v) => v > 0 && v < k);
-  let grandTotalSuppressed = grandTotalRaw > 0 && grandTotalRaw < k;
-
-  const MAX_ITERATIONS = 50;
-  for (let iter = 0; iter < MAX_ITERATIONS; iter++) {
-    let changed = false;
-
-    // Row-level: a lone suppressed cell in a row whose total is shown can be
-    // recovered by subtraction, unless we hide a second cell in that row
-    // (or, failing that, the row total itself).
-    for (let i = 0; i < numRows; i++) {
-      if (rowTotalSuppressed[i]) continue;
-      const suppressedCols = suppressed[i]!.reduce((n, s) => n + (s ? 1 : 0), 0);
-      if (suppressedCols !== 1) continue;
-      const victim = smallestUnsuppressedNonzero(raw.matrix[i]!, suppressed[i]!);
-      if (victim !== -1) {
-        suppressed[i]![victim] = true;
-      } else {
-        rowTotalSuppressed[i] = true;
-      }
-      changed = true;
-    }
-
-    // Column-level: same logic, transposed.
-    for (let j = 0; j < numCols; j++) {
-      if (colTotalSuppressed[j]) continue;
-      const colValues = raw.matrix.map((row) => row[j]!);
-      const colFlags = suppressed.map((row) => row[j]!);
-      const suppressedRows = colFlags.reduce((n, s) => n + (s ? 1 : 0), 0);
-      if (suppressedRows !== 1) continue;
-      const victim = smallestUnsuppressedNonzero(colValues, colFlags);
-      if (victim !== -1) {
-        suppressed[victim]![j] = true;
-      } else {
-        colTotalSuppressed[j] = true;
-      }
-      changed = true;
-    }
-
-    // Grand-total-level: a single suppressed cell anywhere in the table,
-    // with the grand total shown, is recoverable the same way.
-    if (!grandTotalSuppressed) {
-      const flatValues: number[] = [];
-      const flatFlags: boolean[] = [];
-      const flatCoords: Array<[number, number]> = [];
-      for (let i = 0; i < numRows; i++) {
-        for (let j = 0; j < numCols; j++) {
-          flatValues.push(raw.matrix[i]![j]!);
-          flatFlags.push(suppressed[i]![j]!);
-          flatCoords.push([i, j]);
-        }
-      }
-      const suppressedCount = flatFlags.reduce((n, s) => n + (s ? 1 : 0), 0);
-      if (suppressedCount === 1) {
-        const victim = smallestUnsuppressedNonzero(flatValues, flatFlags);
-        if (victim !== -1) {
-          const [vi, vj] = flatCoords[victim]!;
-          suppressed[vi]![vj] = true;
-        } else {
-          grandTotalSuppressed = true;
-        }
-        changed = true;
-      }
-    }
-
-    if (!changed) break;
+  const hidden: boolean[][] = value.map((row) => row.map((v) => v > 0 && v < k));
+  for (let i = 0; i < R; i++) {
+    if (forced.rowTotals?.[i] && value[i]![C]! > 0) hidden[i]![C] = true;
   }
+  if (forced.grandTotal && value[R]![C]! > 0) hidden[R]![C] = true;
 
-  const cells = raw.matrix.map((row, i) => row.map((v, j) => (suppressed[i]![j] ? null : v)));
-  const rowTotals = rowTotalsRaw.map((v, i) => (rowTotalSuppressed[i] ? null : v));
-  const colTotals = colTotalsRaw.map((v, j) => (colTotalSuppressed[j] ? null : v));
-  const grandTotal = grandTotalSuppressed ? null : grandTotalRaw;
+  const at = ([i, j]: Coord) => (hidden[i]![j] ? null : value[i]![j]!);
+  const lines = augmentedLines(raw.rowLabels, raw.colLabels);
+  const maxSteps = (R + 1) * (C + 1);
+
+  for (let step = 0; ; step++) {
+    if (step > maxSteps) {
+      throw new Error("suppression did not converge; refusing to emit a table");
+    }
+    const unsafe = lines.find((line) => lineViolation(line, at, k) !== null);
+    if (!unsafe) break;
+    const [vi, vj] = pickVictim(unsafe.parts, unsafe.total, value, hidden);
+    hidden[vi]![vj] = true;
+  }
 
   return {
     rowDimension: raw.rowDimension,
     colDimension: raw.colDimension,
     rowLabels: raw.rowLabels,
     colLabels: raw.colLabels,
-    cells,
-    rowTotals,
-    colTotals,
-    grandTotal,
+    cells: raw.matrix.map((row, i) => row.map((_, j) => at([i, j]))),
+    rowTotals: raw.rowLabels.map((_, i) => at([i, C])),
+    colTotals: raw.colLabels.map((_, j) => at([R, j])),
+    grandTotal: at([R, C]),
     suppressionThreshold: k,
   };
 }
 
-/** Smallest visible, non-zero, not-already-suppressed value; never picks a genuine zero (rule: zeros carry no disclosive magnitude and stay visible). Returns -1 if none exists. */
-function smallestUnsuppressedNonzero(values: readonly number[], suppressedFlags: readonly boolean[]): number {
-  let bestIdx = -1;
-  let bestValue = Infinity;
-  for (let idx = 0; idx < values.length; idx++) {
-    if (suppressedFlags[idx]) continue;
-    if (values[idx] === 0) continue;
-    if (values[idx]! < bestValue) {
-      bestValue = values[idx]!;
-      bestIdx = idx;
-    }
+/**
+ * Smallest shown non-zero part of the line, falling back to its total. Never a genuine zero:
+ * zeros carry no disclosive magnitude, and hiding one would break the "every hidden value is at
+ * least 1" reasoning the hidden-mass rule depends on.
+ */
+function pickVictim(parts: readonly Coord[], total: Coord, value: number[][], hidden: boolean[][]): Coord {
+  let best: Coord | null = null;
+  for (const [i, j] of parts) {
+    if (hidden[i]![j] || value[i]![j] === 0) continue;
+    if (best === null || value[i]![j]! < value[best[0]]![best[1]]!) best = [i, j];
   }
-  return bestIdx;
+  if (best) return best;
+  const [ti, tj] = total;
+  if (!hidden[ti]![tj] && value[ti]![tj]! > 0) return total;
+  throw new Error("no value left to suppress in an unsafe line; refusing to emit a table");
 }

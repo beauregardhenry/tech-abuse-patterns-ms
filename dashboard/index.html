@@ -2,6 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Tech Abuse Patterns Dashboard (Synthetic Data)</title>
     <meta name="robots" content="noindex" />
@@ -21,9 +26,12 @@
     <main id="app"></main>
 
     <footer>
-      <p>Aggregate counts below the suppression threshold are hidden, not estimated. A genuine zero is always shown as 0.</p>
+      <p>
+        “Suppressed” values are withheld, not estimated: a count below the suppression threshold, or a value hidden so
+        that one can't be worked out from the totals. A genuine zero is always shown as 0.
+      </p>
     </footer>
 
-    <script type="module" src="./main.js"></script>
+    <script type="module" src="./js/main.js"></script>
   </body>
 </html>

@@ -30,6 +30,17 @@ describe("generateIntakeRecords", () => {
     }
   });
 
+  it("stays schema-valid even when configured with an extreme days-to-safety-plan mean", () => {
+    const records = generateIntakeRecords({
+      ...baseConfig,
+      outcomeRates: { safety_plan: 1 },
+      daysToSafetyPlan: { meanDays: 1000, missingRate: 0 },
+    });
+    for (const record of records) {
+      expect(isIntakeRecord(record)).toBe(true);
+    }
+  });
+
   it("applies an abuse_type trend so weight shifts across quarters", () => {
     const quarters = ["2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4"];
     const records = generateIntakeRecords({

@@ -1,5 +1,6 @@
 import type { DashboardAggregates, LabelledOutput } from "./types.js";
 import { renderCard, renderCrossTab, renderFlagCounts, renderNote, renderSeries, renderStats } from "./render.js";
+import { validatePayload } from "./validate.js";
 
 const DATA_URL = "./data/aggregates.SYNTHETIC.json";
 
@@ -8,13 +9,7 @@ async function loadAggregates(): Promise<LabelledOutput<DashboardAggregates>> {
   if (!response.ok) {
     throw new Error(`failed to load ${DATA_URL}: ${response.status}`);
   }
-  const payload = (await response.json()) as LabelledOutput<DashboardAggregates>;
-  if (payload.synthetic !== true) {
-    // Defense in depth: the rendering layer refuses to display anything
-    // that isn't explicitly labelled synthetic (rule: label everywhere).
-    throw new Error("refusing to render unlabelled data");
-  }
-  return payload;
+  return validatePayload(await response.json());
 }
 
 function renderAsOf(container: HTMLElement, dataAsOf: string): void {
@@ -38,14 +33,7 @@ async function main() {
   try {
     const output = await loadAggregates();
     renderAsOf(root, output.dataAsOf);
-    const {
-      abuseTypeByQuarter,
-      abuseTypeByRegion,
-      abuseTypeTotals,
-      outcomeCounts,
-      daysToSafetyPlanByQuarter,
-      suppressionThreshold,
-    } = output.data;
+    const { abuseTypeByQuarter, abuseTypeByRegion, abuseTypeTotals, outcomeCounts, daysToSafetyPlanByQuarter } = output.data;
 
     const coalitionSection = document.createElement("section");
     coalitionSection.setAttribute("aria-label", "State coalition");
@@ -61,7 +49,7 @@ async function main() {
     const regionCard = renderCard(
       coalitionSection,
       "Reports by abuse type, by region",
-      "Where is there no support? (Region cells are genuinely 0 when no reports occurred; small nonzero counts are hidden.)",
+      "Where is there no support? (A 0 means no reports occurred. “Suppressed” marks a small count, or a value hidden to protect one.)",
     );
     renderCrossTab(regionCard, abuseTypeByRegion);
 
@@ -74,7 +62,7 @@ async function main() {
       "Outcomes reached",
       "How fast do survivors get a safety plan, and what else gets accomplished?",
     );
-    renderFlagCounts(outcomesCard, outcomeCounts, suppressionThreshold);
+    renderFlagCounts(outcomesCard, outcomeCounts);
     renderNote(
       outcomesCard,
       "Note: this v0 does not yet track advocate capacity (how many advocates can now handle a tech-abuse case) — " +
@@ -82,7 +70,7 @@ async function main() {
     );
 
     const daysCard = renderCard(fundersSection, "Days to safety plan, by quarter", "How fast do survivors get a safety plan?");
-    renderStats(daysCard, daysToSafetyPlanByQuarter, suppressionThreshold);
+    renderStats(daysCard, daysToSafetyPlanByQuarter);
 
     const legislatorsSection = document.createElement("section");
     legislatorsSection.setAttribute("aria-label", "Legislators");

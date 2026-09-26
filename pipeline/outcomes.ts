@@ -1,5 +1,5 @@
 import { OUTCOMES, type IntakeRecord, type Outcome } from "../schema/index.js";
-import { DEFAULT_SUPPRESSION_THRESHOLD } from "./suppress.js";
+import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD } from "./disclosure.js";
 
 export interface SuppressedFlagCount {
   label: Outcome;
@@ -7,20 +7,25 @@ export interface SuppressedFlagCount {
 }
 
 /**
- * Each outcome is an independent, non-exclusive flag (a record can carry
- * more than one), so there is no coherent "total across outcomes" — summing
- * them would double-count records. Each flag is therefore threshold-
- * suppressed (rule 1) on its own; there is no margin to protect against
- * back-calculation because no combined total is ever displayed alongside
- * them (see docs/PRIVACY.md).
+ * Each outcome is an independent, non-exclusive flag (a record can carry more than one), so there
+ * is no coherent "total across outcomes" and no margin to protect among them. Each count is
+ * threshold-suppressed on its own (rule 1).
+ *
+ * `shownTotal` is the record total the dashboard displays alongside these counts (the grand
+ * total). Showing both makes "records WITHOUT this outcome" = shownTotal - count derivable, so a
+ * count is also suppressed when that complement is a small non-zero number.
  */
 export function countOutcomeFlags(
   records: readonly IntakeRecord[],
   k: number = DEFAULT_SUPPRESSION_THRESHOLD,
+  shownTotal: number | null = null,
 ): SuppressedFlagCount[] {
+  assertValidThreshold(k);
   return OUTCOMES.map((outcome) => {
     const raw = records.filter((r) => r.outcome.includes(outcome)).length;
-    const suppressed = raw > 0 && raw < k;
-    return { label: outcome, count: suppressed ? null : raw };
+    const small = raw > 0 && raw < k;
+    const complement = shownTotal === null ? 0 : shownTotal - raw;
+    const smallComplement = complement > 0 && complement < k;
+    return { label: outcome, count: small || smallComplement ? null : raw };
   });
 }

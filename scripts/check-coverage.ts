@@ -1,15 +1,15 @@
 #!/usr/bin/env -S npx tsx
 // Test coverage only ratchets one way. This measures line coverage over
-// schema/, generator/, and pipeline/ (see vitest.config.ts's `include`) and
-// fails when it slips below the number recorded in coverage-baseline.txt,
-// so a change that adds untested code has to say so out loud instead of
-// quietly diluting the suite.
+// schema/, generator/, pipeline/, and dashboard/validate.ts (see
+// vitest.config.ts's `include`) and fails when it slips below the number
+// recorded in coverage-baseline.txt, so a change that adds untested code has
+// to say so out loud instead of quietly diluting the suite.
 //
-// dashboard/ is excluded on purpose (see vitest.config.ts): it's browser UI
-// verified by rendering it in a headless browser, not by this suite, and
-// counting it here would swamp the real signal from schema/generator/
-// pipeline with code this suite structurally cannot reach. scripts/ is
-// build tooling, excluded the same way.
+// The rest of dashboard/ is excluded on purpose (see vitest.config.ts): it's
+// browser UI verified by rendering it in a headless browser, not by this
+// suite, and counting it here would swamp the real signal with code this
+// suite structurally cannot reach. scripts/ is build tooling, excluded the
+// same way.
 //
 // Unlike Kistulentz's per-architecture floors (Swift coverage instrumentation
 // differs between Apple silicon and Intel), Node coverage via v8 is
@@ -68,7 +68,7 @@ function readBaseline(): number | null {
 function writeBaseline(pct: number): void {
   writeFileSync(
     BASELINE_FILE,
-    `# Line coverage floor for schema/, generator/, and pipeline/ (see vitest.config.ts).\n` +
+    `# Line coverage floor for the scope in vitest.config.ts's coverage.include.\n` +
       `# Raised automatically by .github/workflows/coverage-ratchet.yml on every push to\n` +
       `# main; don't bump it from a feature branch (see the header of this script). Lower\n` +
       `# it only deliberately, with a reason in the commit.\n` +
@@ -94,7 +94,7 @@ function measureCoveragePct(): number {
     console.error("Coverage check failed: coverage-summary.json did not contain a total line percentage.");
     process.exit(1);
   }
-  console.log(`\nLine coverage (schema/generator/pipeline): ${lines.pct}% (${lines.covered}/${lines.total} lines)`);
+  console.log(`\nLine coverage (vitest.config.ts scope): ${lines.pct}% (${lines.covered}/${lines.total} lines)`);
   return lines.pct;
 }
 
