@@ -26,12 +26,12 @@ jobs:
     timeout-minutes: 5
     if: "!contains(github.event.head_commit.message, '[skip ratchet]')"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: main
           persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
