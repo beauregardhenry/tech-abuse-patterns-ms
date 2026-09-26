@@ -21,3 +21,7 @@ jobs:
       - run: npm run build
 
       - run: npm test
+
+      - run: npm run build:dashboard
+
+      - run: npm run build:data
