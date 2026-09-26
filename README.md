@@ -40,7 +40,7 @@ npm install
 npm run build           # typecheck + compile schema/generator/pipeline/scripts to dist/
 npm test                # run the full test suite (privacy/suppression tests included)
 npm run build:data      # generate a fresh synthetic dataset -> dashboard/data/aggregates.SYNTHETIC.json
-npm run build:dashboard # compile the browser-side dashboard TypeScript in place
+npm run build:dashboard # compile the browser-side dashboard TypeScript into dashboard/js/
 ```
 
 Then serve the `dashboard/` directory with any static file server and open it, e.g.:
@@ -49,8 +49,19 @@ Then serve the `dashboard/` directory with any static file server and open it, e
 npx http-server dashboard -p 8080
 ```
 
-`dashboard/data/*.json` is generated output (gitignored) — run `build:data` before serving if it's missing.
+`dashboard/data/*.json` and `dashboard/js/` are generated output (gitignored), so run `build:data` and `build:dashboard` before serving if they're missing.
 
 ## Testing priority
 
-Per working practice, the privacy rules are the highest-priority area and are tested first: `tests/schema.test.ts` (rejecting free text/excluded fields), `tests/generator.test.ts` (determinism), `tests/suppression.test.ts` and `tests/pipeline.test.ts` (no cell below k, no back-calculable cell, synthetic labelling, no record-level data reaching the rendering layer). All of these must be green before any dashboard change is considered done.
+Per working practice, the privacy rules are the highest-priority area and are tested first. They must all be green before any dashboard change is considered done:
+
+- `tests/schema.test.ts`: rejects free text and excluded fields, enforces the days cap and cross-field rules.
+- `tests/generator.test.ts`: the generator is deterministic for a given seed.
+- `tests/suppression.test.ts` and `tests/pipeline.test.ts`:
+  - no shown count below k;
+  - no hidden value recoverable by subtraction, totals included;
+  - totals shared between tables stay consistent;
+  - input is validated at the pipeline boundary;
+  - every output is labelled synthetic;
+  - no record-level data reaches the rendering layer.
+- `tests/dashboard-validate.test.ts`: the dashboard refuses a tampered data file.
