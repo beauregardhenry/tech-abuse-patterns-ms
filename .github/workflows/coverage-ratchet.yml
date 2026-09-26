@@ -1,0 +1,52 @@
+name: Coverage ratchet
+
+# Raises coverage-baseline.txt on main after coverage climbs, instead of relying on each PR to
+# bump the file itself. Two PRs open at once used to both edit the same line and conflict with
+# each other (or silently clobber one another's real number) whenever both raised coverage; this
+# keeps the file out of feature branches entirely and lets exactly one place -- post-merge, on
+# main -- own writing to it.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coverage-ratchet-main
+  cancel-in-progress: false
+
+jobs:
+  ratchet:
+    name: Ratchet the coverage baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: "!contains(github.event.head_commit.message, '[skip ratchet]')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Measure coverage and raise the baseline if it climbed
+        run: npx tsx scripts/check-coverage.ts --update-if-higher
+
+      - name: Commit and push the baseline if it changed
+        run: |
+          if git diff --quiet -- coverage-baseline.txt; then
+            echo "No coverage increase to record."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add coverage-baseline.txt
+          git commit -m "chore: ratchet coverage baseline [skip ratchet]" -m "$(git diff --cached -- coverage-baseline.txt)"
+          git push origin HEAD:main
