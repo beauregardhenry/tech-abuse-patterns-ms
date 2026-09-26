@@ -4,7 +4,7 @@ import type { Dimension } from "./aggregate.js";
 
 export interface SuppressedStat {
   label: string;
-  /** Sample size behind the stat. Null when suppressed (same k rule as any other count). */
+  /** Sample size behind the stat. Null when suppressed (the same k rule applied to every other count). */
   n: number | null;
   meanDays: number | null;
 }
