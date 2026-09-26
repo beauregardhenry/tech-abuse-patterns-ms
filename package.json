@@ -2,12 +2,12 @@
   "name": "tech-abuse-patterns-ms",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "project to anonymously track tech abuse patterns in MS. (TFA)",
-  "main": "dist/server.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js",
-    "dev": "tsx watch src/server.ts",
+    "build:dashboard": "tsc -p dashboard/tsconfig.json",
+    "build:data": "tsx scripts/build-dashboard-data.ts",
     "test": "vitest run"
   },
   "repository": {
@@ -21,16 +21,13 @@
     "url": "https://github.com/beauregardhenry/tech-abuse-patterns-ms/issues"
   },
   "homepage": "https://github.com/beauregardhenry/tech-abuse-patterns-ms#readme",
-  "dependencies": {
-    "express": "^5.2.1"
-  },
   "devDependencies": {
-    "@types/express": "^5.0.6",
     "@types/node": "^26.6.3",
-    "@types/supertest": "^7.2.1",
-    "supertest": "^7.3.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }
