@@ -1,0 +1,5 @@
+# Test-case-count floor for tests/*.test.ts. Raised automatically by
+# .github/workflows/test-count-ratchet.yml on every push to main; don't bump it
+# from a feature branch (see the header of scripts/check-test-count.ts). Lower it
+# only deliberately, with a reason in the commit.
+33
