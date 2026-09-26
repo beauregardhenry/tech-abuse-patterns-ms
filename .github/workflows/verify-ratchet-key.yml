@@ -1,0 +1,28 @@
+name: Verify ratchet deploy key
+
+# Proves the ratchet deploy key (secret RATCHET_DEPLOY_KEY) can push, without waiting for a merge
+# that happens to raise a baseline: it pushes the current main commit to a throwaway branch with
+# the key, then deletes that branch. Run it after adding or rotating the key.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify the ratchet deploy key can push
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Push to a throwaway branch with the deploy key, then delete it
+        env:
+          RATCHET_DEPLOY_KEY: ${{ secrets.RATCHET_DEPLOY_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: bash scripts/push-ratchet-baseline.sh --verify
