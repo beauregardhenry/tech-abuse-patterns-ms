@@ -24,21 +24,27 @@ jobs:
     timeout-minutes: 5
     if: "!contains(github.event.head_commit.message, '[skip ratchet]')"
     steps:
+      # The write-scoped token must not sit in .git/config while dependencies install; it's handed
+      # only to the final push step below.
       - uses: actions/checkout@v4
         with:
           ref: main
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
 
       - name: Measure the test count and raise the baseline if it climbed
         run: npx tsx scripts/check-test-count.ts --update-if-higher
 
       - name: Commit and push the baseline if it changed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           if git diff --quiet -- test-count-baseline.txt; then
             echo "No test count increase to record."
@@ -48,4 +54,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add test-count-baseline.txt
           git commit -m "chore: ratchet test count baseline [skip ratchet]" -m "$(git diff --cached -- test-count-baseline.txt)"
-          git push origin HEAD:main
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPOSITORY}.git" HEAD:main

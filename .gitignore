@@ -6,5 +6,4 @@ coverage/
 !.env.example
 *.log
 dashboard/data/*.json
-dashboard/*.js
-dashboard/*.js.map
+dashboard/js/

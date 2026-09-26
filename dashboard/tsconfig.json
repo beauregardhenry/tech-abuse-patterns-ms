@@ -5,11 +5,12 @@
     "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM"],
     "rootDir": ".",
+    "outDir": "js",
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "sourceMap": true,
     "noEmit": false
   },
-  "include": ["."]
+  "include": ["*.ts"]
 }

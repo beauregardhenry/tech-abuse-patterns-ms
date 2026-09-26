@@ -1,7 +1,9 @@
 import type { SuppressedFlagCount, SuppressedStat, SuppressedTable } from "./types.js";
 
-function formatCount(value: number | null, threshold: number): string {
-  return value === null ? `hidden (<${threshold})` : String(value);
+// Deliberately not "hidden (<k)": some suppressed values are large counts hidden only to protect a
+// small one elsewhere, so a "<k" label would be false and would hand a reader a bound to work with.
+function formatCount(value: number | null): string {
+  return value === null ? "suppressed" : String(value);
 }
 
 export function renderCard(container: HTMLElement, title: string, questionText: string): HTMLElement {
@@ -54,13 +56,13 @@ export function renderCrossTab(card: HTMLElement, table: SuppressedTable): void 
 
     table.colLabels.forEach((_, j) => {
       const td = document.createElement("td");
-      td.textContent = formatCount(table.cells[i]![j]!, table.suppressionThreshold);
+      td.textContent = formatCount(table.cells[i]![j]!);
       row.appendChild(td);
     });
 
     const totalCell = document.createElement("td");
     totalCell.className = "total-cell";
-    totalCell.textContent = formatCount(table.rowTotals[i]!, table.suppressionThreshold);
+    totalCell.textContent = formatCount(table.rowTotals[i]!);
     row.appendChild(totalCell);
 
     tbody.appendChild(row);
@@ -76,12 +78,12 @@ export function renderCrossTab(card: HTMLElement, table: SuppressedTable): void 
   table.colLabels.forEach((_, j) => {
     const td = document.createElement("td");
     td.className = "total-cell";
-    td.textContent = formatCount(table.colTotals[j]!, table.suppressionThreshold);
+    td.textContent = formatCount(table.colTotals[j]!);
     totalRow.appendChild(td);
   });
   const grandTotalCell = document.createElement("td");
   grandTotalCell.className = "total-cell";
-  grandTotalCell.textContent = formatCount(table.grandTotal, table.suppressionThreshold);
+  grandTotalCell.textContent = formatCount(table.grandTotal);
   totalRow.appendChild(grandTotalCell);
   tfoot.appendChild(totalRow);
   el.appendChild(tfoot);
@@ -97,7 +99,7 @@ export function renderSeries(card: HTMLElement, table: SuppressedTable): void {
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");
-    dd.textContent = formatCount(table.cells[i]![0]!, table.suppressionThreshold);
+    dd.textContent = formatCount(table.cells[i]![0]!);
     list.appendChild(dt);
     list.appendChild(dd);
   });
@@ -106,33 +108,33 @@ export function renderSeries(card: HTMLElement, table: SuppressedTable): void {
   dt.textContent = "Statewide total";
   const dd = document.createElement("dd");
   dd.className = "total-cell";
-  dd.textContent = formatCount(table.grandTotal, table.suppressionThreshold);
+  dd.textContent = formatCount(table.grandTotal);
   list.appendChild(dt);
   list.appendChild(dd);
   card.appendChild(list);
 }
 
-export function renderFlagCounts(card: HTMLElement, counts: readonly SuppressedFlagCount[], threshold: number): void {
+export function renderFlagCounts(card: HTMLElement, counts: readonly SuppressedFlagCount[]): void {
   const list = document.createElement("dl");
   list.className = "flag-counts";
   for (const { label, count } of counts) {
     const dt = document.createElement("dt");
     dt.textContent = label;
     const dd = document.createElement("dd");
-    dd.textContent = formatCount(count, threshold);
+    dd.textContent = formatCount(count);
     list.appendChild(dt);
     list.appendChild(dd);
   }
   card.appendChild(list);
 }
 
-export function renderStats(card: HTMLElement, stats: readonly SuppressedStat[], threshold: number): void {
+export function renderStats(card: HTMLElement, stats: readonly SuppressedStat[]): void {
   const el = document.createElement("table");
   el.className = "aggregate-table";
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  for (const text of ["Quarter", "Records measured", "Mean days to safety plan"]) {
+  for (const text of ["Quarter", "Records measured", "Median days to safety plan"]) {
     const th = document.createElement("th");
     th.textContent = text;
     headRow.appendChild(th);
@@ -149,12 +151,12 @@ export function renderStats(card: HTMLElement, stats: readonly SuppressedStat[],
     row.appendChild(labelCell);
 
     const nCell = document.createElement("td");
-    nCell.textContent = formatCount(stat.n, threshold);
+    nCell.textContent = formatCount(stat.n);
     row.appendChild(nCell);
 
-    const meanCell = document.createElement("td");
-    meanCell.textContent = stat.meanDays === null ? "—" : stat.meanDays.toFixed(1);
-    row.appendChild(meanCell);
+    const medianCell = document.createElement("td");
+    medianCell.textContent = stat.medianDays === null ? "—" : stat.medianDays.toFixed(1);
+    row.appendChild(medianCell);
 
     tbody.appendChild(row);
   }

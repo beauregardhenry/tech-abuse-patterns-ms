@@ -32,7 +32,7 @@ export interface SuppressedFlagCount {
 export interface SuppressedStat {
   label: string;
   n: number | null;
-  meanDays: number | null;
+  medianDays: number | null;
 }
 
 export interface DashboardAggregates {

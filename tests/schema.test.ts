@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isIntakeRecord, parseIntakeRecord } from "../schema/index.js";
+import { isIntakeRecord, MAX_DAYS_TO_SAFETY_PLAN, parseIntakeRecord } from "../schema/index.js";
 
 function validRecord() {
   return {
@@ -62,6 +62,22 @@ describe("IntakeRecordSchema", () => {
 
   it("rejects a negative days_to_safety_plan", () => {
     const record = { ...validRecord(), days_to_safety_plan: -1 };
+    expect(isIntakeRecord(record)).toBe(false);
+  });
+
+  it("rejects a days_to_safety_plan above the cap, so one malformed record can't skew a published stat", () => {
+    expect(isIntakeRecord({ ...validRecord(), days_to_safety_plan: MAX_DAYS_TO_SAFETY_PLAN })).toBe(true);
+    expect(isIntakeRecord({ ...validRecord(), days_to_safety_plan: MAX_DAYS_TO_SAFETY_PLAN + 1 })).toBe(false);
+    expect(isIntakeRecord({ ...validRecord(), days_to_safety_plan: 100000 })).toBe(false);
+  });
+
+  it("rejects days_to_safety_plan on a record with no safety_plan outcome", () => {
+    const record = { ...validRecord(), outcome: ["evidence_preserved"], days_to_safety_plan: 3 };
+    expect(isIntakeRecord(record)).toBe(false);
+  });
+
+  it("rejects a repeated outcome", () => {
+    const record = { ...validRecord(), outcome: ["safety_plan", "safety_plan"] };
     expect(isIntakeRecord(record)).toBe(false);
   });
 

@@ -26,12 +26,3 @@ export function buildCrossTab(records: readonly IntakeRecord[], rows: Dimension,
     matrix,
   };
 }
-
-/** A one-way distribution, modeled as a cross-tab against a single implicit "all" column so it reuses the same suppression algorithm. */
-export function buildSeries(records: readonly IntakeRecord[], dimension: Dimension): RawTable {
-  return buildCrossTab(records, dimension, { name: "all", labels: ["all"], keyOf: () => "all" });
-}
-
-export function filterByQuarter(records: readonly IntakeRecord[], quarter: string): IntakeRecord[] {
-  return records.filter((r) => r.quarter === quarter);
-}
