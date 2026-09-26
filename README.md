@@ -12,7 +12,7 @@ Every chart on the dashboard answers one of three questions:
 | Funders | How many advocates can now handle tech abuse cases, and how fast do survivors get a safety plan? |
 | Legislators | What does tech abuse look like in Mississippi, in numbers that can support a bill? |
 
-Read `docs/PRIVACY.md` for how the privacy rules (suppressing small counts, protecting against back-calculation, coarsened data, labelled synthetic data) are actually implemented and enforced, and `docs/DECISIONS.md` for what was rejected, what's a placeholder pending partner/coalition input, and what's still open.
+Read `docs/PRIVACY.md` for how the privacy rules (suppressing small counts, protecting against back-calculation, coarsened data, labelled synthetic data) are actually implemented and enforced, and `docs/DECISIONS.md` for what was rejected, what's a placeholder pending partner/coalition input, and what's still open. `docs/EXISTING_DATA.md` covers what comparable data already exists.
 
 ## Repo layout
 
@@ -23,7 +23,7 @@ Read `docs/PRIVACY.md` for how the privacy rules (suppressing small counts, prot
 /dashboard     front end; consumes suppressed aggregates only, never raw records
 /scripts       build-time scripts (e.g. generating the dashboard's data file)
 /tests         vitest suite — privacy/suppression tests are the priority
-/docs          PRIVACY.md and DECISIONS.md
+/docs          PRIVACY.md, DECISIONS.md and EXISTING_DATA.md
 ```
 
 ## Setup
