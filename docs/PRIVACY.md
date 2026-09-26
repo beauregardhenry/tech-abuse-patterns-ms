@@ -107,4 +107,5 @@ The page also sets a strict **Content-Security-Policy**: same-origin scripts, st
 - No real k-anonymity/suppression review by a statistician, including the multi-line limitation above.
 - No review against the actual VAWA/FVPSA/VOCA confidentiality requirements beyond the structural rules above (region/quarter only, no free text). That's a legal and compliance review, which code review can't substitute for.
 - No threat modeling for re-identification by linking to outside datasets (e.g. a public incident report that narrows a quarter+region combination further).
+- No protection against identifying a *program*. If one program serves a whole region, that region's numbers are that program's caseload. That discloses something about an organization, not a person, but it's still a disclosure. Region design has to account for it (see `docs/DECISIONS.md`, Region definitions).
 - No protection against differencing *across releases*. Comparing two refreshes of the dashboard reveals what changed between them. Rule 4's coarse, periodic refresh limits this but doesn't eliminate it.
