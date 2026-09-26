@@ -1,5 +1,5 @@
-# Line coverage floor for schema/, generator/, and pipeline/ (see vitest.config.ts).
+# Line coverage floor for the scope in vitest.config.ts's coverage.include.
 # Raised automatically by .github/workflows/coverage-ratchet.yml on every push to
 # main; don't bump it from a feature branch (see the header of this script). Lower
 # it only deliberately, with a reason in the commit.
-91.20
+97.05
