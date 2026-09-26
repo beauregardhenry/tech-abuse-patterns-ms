@@ -1,0 +1,51 @@
+name: Test count ratchet
+
+# Raises test-count-baseline.txt on main after the test count climbs, instead of relying on each PR
+# to bump the file itself -- the same reason coverage-ratchet.yml exists and owns
+# coverage-baseline.txt the same way. Keeps the file out of feature branches entirely and lets
+# exactly one place -- post-merge, on main -- own writing to it.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: test-count-ratchet-main
+  cancel-in-progress: false
+
+jobs:
+  ratchet:
+    name: Ratchet the test count baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: "!contains(github.event.head_commit.message, '[skip ratchet]')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Measure the test count and raise the baseline if it climbed
+        run: npx tsx scripts/check-test-count.ts --update-if-higher
+
+      - name: Commit and push the baseline if it changed
+        run: |
+          if git diff --quiet -- test-count-baseline.txt; then
+            echo "No test count increase to record."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add test-count-baseline.txt
+          git commit -m "chore: ratchet test count baseline [skip ratchet]" -m "$(git diff --cached -- test-count-baseline.txt)"
+          git push origin HEAD:main

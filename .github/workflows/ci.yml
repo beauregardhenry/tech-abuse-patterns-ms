@@ -4,10 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
+    name: Build, test, and dashboard
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -16,11 +26,25 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Show toolchain versions
+        run: |
+          node --version
+          npm --version
+
       - run: npm ci
 
-      - run: npm run build
+      - name: Check for banned patterns
+        run: npm run check:banned-patterns
+
+      - name: Check the test count ratchet
+        run: npm run check:test-count
 
       - run: npm test
+
+      - name: Check the coverage ratchet
+        run: npm run check:coverage
+
+      - run: npm run build
 
       - run: npm run build:dashboard
 

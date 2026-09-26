@@ -8,7 +8,10 @@
     "build": "tsc -p tsconfig.json",
     "build:dashboard": "tsc -p dashboard/tsconfig.json",
     "build:data": "tsx scripts/build-dashboard-data.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:banned-patterns": "tsx scripts/check-banned-patterns.ts",
+    "check:test-count": "tsx scripts/check-test-count.ts",
+    "check:coverage": "tsx scripts/check-coverage.ts"
   },
   "repository": {
     "type": "git",
@@ -23,6 +26,7 @@
   "homepage": "https://github.com/beauregardhenry/tech-abuse-patterns-ms#readme",
   "devDependencies": {
     "@types/node": "^26.6.3",
+    "@vitest/coverage-v8": "^5.0.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.2"
