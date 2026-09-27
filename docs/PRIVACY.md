@@ -57,7 +57,7 @@ Otherwise these values are independent: no combined total is shown alongside the
 
 **Known limitations.** A second review found that checking each line on its own missed real leaks. In 59 of 3,000 randomized runs, a hidden value could be worked out exactly by combining several lines, including a count of 7 at k=11. The combination check above closes that, with a regression test built from one of those tables. What's still not covered:
 
-- **Ranges.** The rules stop exact values and small exact sums. A viewer can still narrow a hidden value to a range, e.g. "between 1 and 10" when two hidden cells add up to 11. That's by design here, but a statistician may want a minimum protection range.
+- **Ranges.** The rules stop exact values and small exact sums. A viewer can still narrow a hidden value to a range, e.g. "between 1 and 10" when two hidden cells add up to 11. That's by design here, but a statistician may want a minimum protection range. `npm run analyze:ranges` measures these ranges exactly (a linear program per hidden value, over both tables at once) across dataset sizes and thresholds.
 - **Weighted combinations.** Within a table, each line is used once in a combination. Combinations that use a line twice aren't searched, and neither are the inequalities that hidden values being at least 1 adds. For these tables, any value an equation pins down exactly also shows up in a combination that uses each line once, and the exact cross-table check covers the same ground again.
 - **Across tables**, only exact recovery is checked, not small sums.
 

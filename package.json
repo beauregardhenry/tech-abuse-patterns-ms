@@ -11,7 +11,8 @@
     "test": "vitest run",
     "check:banned-patterns": "tsx scripts/check-banned-patterns.ts",
     "check:test-count": "tsx scripts/check-test-count.ts",
-    "check:coverage": "tsx scripts/check-coverage.ts"
+    "check:coverage": "tsx scripts/check-coverage.ts",
+    "analyze:ranges": "tsx scripts/analyze-ranges.ts"
   },
   "repository": {
     "type": "git",
