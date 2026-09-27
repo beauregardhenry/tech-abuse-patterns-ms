@@ -37,7 +37,9 @@ section[aria-label] {
   border-radius: 8px;
   padding: 1rem 1.25rem;
   margin: 1rem 0;
-  overflow: hidden;
+  /* Scroll, not clip: on a phone the widest table is wider than the card, and hiding the overflow
+     cut off its last columns, totals included. */
+  overflow-x: auto;
 }
 
 .chart-card .watermark {
@@ -50,10 +52,15 @@ section[aria-label] {
   font-weight: 800;
   letter-spacing: 0.2rem;
   color: var(--watermark);
-  transform: rotate(-25deg);
+  overflow: hidden;
   pointer-events: none;
   z-index: 0;
   text-transform: uppercase;
+}
+
+.chart-card .watermark span {
+  transform: rotate(-25deg);
+  white-space: nowrap;
 }
 
 .chart-card h2,
@@ -122,4 +129,17 @@ section[aria-label] {
 #data-as-of {
   font-size: 0.9rem;
   color: #555;
+}
+
+/* Read by screen readers, not shown: table captions duplicate the card heading visually. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }

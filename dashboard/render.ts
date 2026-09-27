@@ -6,13 +6,43 @@ function formatCount(value: number | null): string {
   return value === null ? "suppressed" : String(value);
 }
 
+/**
+ * A table's accessible name: the card's heading, plus the synthetic label. Hidden visually (the
+ * heading is right above it) but read by screen readers, which announce it when a user moves
+ * between tables. The visual watermark is hidden from them instead, so they aren't read the
+ * same words before every heading.
+ */
+function addCaption(table: HTMLTableElement, card: HTMLElement): void {
+  const caption = document.createElement("caption");
+  caption.className = "visually-hidden";
+  caption.textContent = `${card.querySelector("h2")?.textContent ?? "Table"} (synthetic data)`;
+  table.appendChild(caption);
+}
+
+function columnHeader(text: string): HTMLTableCellElement {
+  const th = document.createElement("th");
+  th.scope = "col";
+  th.textContent = text;
+  return th;
+}
+
+/** "abuse_type" -> "Abuse type", for the header above the row labels. */
+function dimensionName(dimension: string): string {
+  const words = dimension.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 export function renderCard(container: HTMLElement, title: string, questionText: string): HTMLElement {
   const card = document.createElement("section");
   card.className = "chart-card";
 
   const watermark = document.createElement("div");
   watermark.className = "watermark";
-  watermark.textContent = "SYNTHETIC DATA";
+  watermark.setAttribute("aria-hidden", "true");
+  // The text rotates inside a box that clips it, so the tilt can't overflow a scrollable card.
+  const watermarkText = document.createElement("span");
+  watermarkText.textContent = "SYNTHETIC DATA";
+  watermark.appendChild(watermarkText);
   card.appendChild(watermark);
 
   const heading = document.createElement("h2");
@@ -31,18 +61,13 @@ export function renderCard(container: HTMLElement, title: string, questionText: 
 export function renderCrossTab(card: HTMLElement, table: SuppressedTable): void {
   const el = document.createElement("table");
   el.className = "aggregate-table";
+  addCaption(el, card);
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  headRow.appendChild(document.createElement("th"));
-  for (const colLabel of table.colLabels) {
-    const th = document.createElement("th");
-    th.textContent = colLabel;
-    headRow.appendChild(th);
-  }
-  const totalHeader = document.createElement("th");
-  totalHeader.textContent = "Total";
-  headRow.appendChild(totalHeader);
+  headRow.appendChild(columnHeader(dimensionName(table.rowDimension)));
+  for (const colLabel of table.colLabels) headRow.appendChild(columnHeader(colLabel));
+  headRow.appendChild(columnHeader("Total"));
   thead.appendChild(headRow);
   el.appendChild(thead);
 
@@ -131,14 +156,11 @@ export function renderFlagCounts(card: HTMLElement, counts: readonly SuppressedF
 export function renderStats(card: HTMLElement, stats: readonly SuppressedStat[]): void {
   const el = document.createElement("table");
   el.className = "aggregate-table";
+  addCaption(el, card);
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  for (const text of ["Quarter", "Records measured", "Median days to safety plan"]) {
-    const th = document.createElement("th");
-    th.textContent = text;
-    headRow.appendChild(th);
-  }
+  for (const text of ["Quarter", "Records measured", "Median days to safety plan"]) headRow.appendChild(columnHeader(text));
   thead.appendChild(headRow);
   el.appendChild(thead);
 
