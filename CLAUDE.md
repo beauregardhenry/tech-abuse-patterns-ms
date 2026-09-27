@@ -23,6 +23,11 @@ Repo-specific instructions for Claude Code sessions working on this project.
     `RATCHET_DEPLOY_KEY` secret (`scripts/push-ratchet-baseline.sh`).
     After adding or rotating that key, run the "Verify ratchet deploy
     key" workflow.
+- Dependabot opens weekly update PRs (`.github/dependabot.yml`), and auto-merge
+  isn't enabled on them automatically. When asked to handle them: enable
+  auto-merge on the grouped minor/patch PRs; for a major-version PR, read the
+  project's release notes for breaking changes that affect this repo before
+  enabling it, and fix whatever CI flags.
 - Still watch subscribed PRs for CI failures and review comments per the
   normal PR-driving rules. Auto-merge only replaces the final manual
   "click merge" step, not the responsibility to get a PR green first.

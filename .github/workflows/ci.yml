@@ -51,3 +51,8 @@ jobs:
       - run: npm run build:dashboard
 
       - run: npm run build:data
+
+      # The partner demo embeds pipeline output and imports the dashboard's compiled modules, so a
+      # change that would break it fails here, not in front of a partner.
+      - name: Build the partner demo
+        run: npm run build:demo

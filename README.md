@@ -43,6 +43,7 @@ npm test                # run the full test suite (privacy/suppression tests inc
 npm run build:data      # generate a fresh synthetic dataset -> dashboard/data/aggregates.SYNTHETIC.json
 npm run build:dashboard # compile the browser-side dashboard TypeScript into dashboard/js/
 npm run analyze:ranges  # measure how narrowly a viewer can bound suppressed values (for the disclosure review)
+npm run build:demo      # build the partner demo page into demo/dist/ (see "Partner demo" below)
 ```
 
 Then serve the `dashboard/` directory with any static file server and open it, e.g.:
@@ -52,6 +53,12 @@ npx http-server dashboard -p 8080
 ```
 
 `dashboard/data/*.json` and `dashboard/js/` are generated output (gitignored), so run `build:data` and `build:dashboard` before serving if they're missing.
+
+## Partner demo
+
+`npm run build:demo` builds a clickable demo for prospective partner organizations into `demo/dist/`. It's the page in `demo/template.html` with two synthetic datasets from the real pipeline embedded: 5,000 records, and 250 records so suppression is visible. It imports the dashboard's own compiled render and check modules, so it shows exactly what the dashboard would. CI builds it on every change, so it can't silently break.
+
+It's published as a private claude.ai page, shared only with the people it's meant for. To update it, rebuild and republish `demo/dist/tech-abuse-demo.html` to the same page, with the `js/` folder alongside it at the same paths.
 
 ## Testing priority
 
