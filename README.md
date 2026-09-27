@@ -43,6 +43,7 @@ npm test                # run the full test suite (privacy/suppression tests inc
 npm run build:data      # generate a fresh synthetic dataset -> dashboard/data/aggregates.SYNTHETIC.json
 npm run build:dashboard # compile the browser-side dashboard TypeScript into dashboard/js/
 npm run analyze:ranges  # measure how narrowly a viewer can bound suppressed values (for the disclosure review)
+npm run analyze:releases # measure what comparing successive releases exposes, under several release policies
 npm run build:demo      # build the partner demo page into demo/dist/ (see "Partner demo" below)
 ```
 
