@@ -12,7 +12,8 @@
     "check:banned-patterns": "tsx scripts/check-banned-patterns.ts",
     "check:test-count": "tsx scripts/check-test-count.ts",
     "check:coverage": "tsx scripts/check-coverage.ts",
-    "analyze:ranges": "tsx scripts/analyze-ranges.ts"
+    "analyze:ranges": "tsx scripts/analyze-ranges.ts",
+    "build:demo": "npm run build:dashboard && tsx scripts/build-demo.ts"
   },
   "repository": {
     "type": "git",

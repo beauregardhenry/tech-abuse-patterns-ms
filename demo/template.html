@@ -1,0 +1,311 @@
+<!--
+  Partner demo of the dashboard, published as a private claude.ai page (see README, "Partner demo").
+  Built by `npm run build:demo`, which embeds two synthetic datasets from the real pipeline in the two
+  data placeholders below and copies in the dashboard's own compiled render and check modules, so the
+  demo shows exactly what the dashboard would. The page host supplies <html>, <head> and <body>.
+-->
+<title>Tech Abuse Patterns Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --bg: #f5f7f8;
+    --surface: #ffffff;
+    --ink: #15232d;
+    --muted: #566874;
+    --line: #d6dde2;
+    --accent: #1f5f7a;
+    --accent-ink: #ffffff;
+    --accent-soft: #e4eff4;
+    --caution-bg: #fbeed6;
+    --caution-ink: #5f3b00;
+    --hatch: #b3c1ca;
+    --watermark: rgba(31, 95, 122, 0.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #0e161c;
+      --surface: #15212a;
+      --ink: #e5ecf0;
+      --muted: #97a8b3;
+      --line: #283843;
+      --accent: #72b6d3;
+      --accent-ink: #0e161c;
+      --accent-soft: #1a3240;
+      --caution-bg: #3a2b12;
+      --caution-ink: #f1c97f;
+      --hatch: #4a5f6e;
+      --watermark: rgba(114, 182, 211, 0.07);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0e161c;
+    --surface: #15212a;
+    --ink: #e5ecf0;
+    --muted: #97a8b3;
+    --line: #283843;
+    --accent: #72b6d3;
+    --accent-ink: #0e161c;
+    --accent-soft: #1a3240;
+    --caution-bg: #3a2b12;
+    --caution-ink: #f1c97f;
+    --hatch: #4a5f6e;
+    --watermark: rgba(114, 182, 211, 0.07);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Public Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  .page {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding-inline: 16px;
+    padding-block: 0 48px;
+    display: grid;
+    gap: 32px;
+  }
+  h1, h2, h3 { text-wrap: balance; margin: 0; line-height: 1.2; }
+  p { margin: 0; }
+
+  .banner {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: var(--caution-bg);
+    color: var(--caution-ink);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 16px;
+    font-size: 13.5px;
+    text-align: center;
+  }
+  .banner strong { letter-spacing: 0.04em; text-transform: uppercase; font-size: 12px; margin-right: 6px; }
+
+  header.intro { display: grid; gap: 14px; padding-top: 32px; }
+  .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(28px, 4vw, 38px); font-weight: 700; letter-spacing: -0.01em; }
+  .lead { font-size: 17px; max-width: 62ch; color: var(--ink); }
+
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+  .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 3px; gap: 3px; flex-wrap: wrap; }
+  .segmented input { position: absolute; opacity: 0; pointer-events: none; }
+  .segmented label { padding: 7px 14px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--muted); }
+  .segmented input:checked + label { background: var(--accent); color: var(--accent-ink); }
+  .segmented input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hint { color: var(--muted); font-size: 13.5px; max-width: 52ch; }
+  #as-of { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; }
+
+  .protection { background: var(--accent-soft); border-radius: 10px; padding: 18px 20px; display: grid; gap: 10px; }
+  .protection h2 { font-size: 16px; }
+  .protection ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; max-width: 75ch; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13.5px; color: var(--muted); align-items: center; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+
+  #views { display: grid; gap: 36px; }
+  .audience { display: grid; gap: 16px; }
+  .audience > h2 { font-size: 21px; font-weight: 700; }
+  .audience > .audience-note { color: var(--muted); max-width: 70ch; margin-top: -8px; }
+  .cards { display: grid; gap: 16px; }
+  @media (min-width: 880px) { .cards.pair { grid-template-columns: 1fr 1fr; align-items: start; } }
+
+  .chart-card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px 20px;
+    overflow-x: auto;
+    display: grid;
+    gap: 10px;
+    align-content: start;
+  }
+  .chart-card > * { position: relative; z-index: 1; }
+  .chart-card .watermark {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: clamp(28px, 6vw, 52px);
+    letter-spacing: 0.12em;
+    color: var(--watermark);
+    transform: rotate(-12deg);
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .chart-card h2 { font-size: 17px; font-weight: 600; }
+  .chart-card .question { color: var(--muted); font-size: 14px; }
+  .chart-card .note { color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 10px; }
+
+  table.aggregate-table { border-collapse: collapse; font-variant-numeric: tabular-nums; min-width: 100%; font-size: 14px; }
+  .aggregate-table th, .aggregate-table td { padding: 8px 10px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .aggregate-table thead th { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); white-space: normal; vertical-align: bottom; }
+  .aggregate-table th[scope="row"], .aggregate-table thead th:first-child { text-align: left; font-weight: 500; }
+  .aggregate-table tfoot th, .aggregate-table tfoot td { border-bottom: none; }
+  .aggregate-table .total-cell { font-weight: 600; }
+  .aggregate-table tfoot td, .aggregate-table tfoot th { border-top: 2px solid var(--line); }
+
+  .is-suppressed span, .chip-suppressed {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    border: 1px solid var(--hatch);
+    background: repeating-linear-gradient(135deg, transparent 0 4px, var(--hatch) 4px 5px);
+  }
+  .is-zero, .chip-zero { color: var(--muted); }
+
+  dl.flag-counts { display: grid; grid-template-columns: minmax(0, 1fr) auto; margin: 0; font-variant-numeric: tabular-nums; }
+  dl.flag-counts dt, dl.flag-counts dd { padding: 8px 0; border-bottom: 1px solid var(--line); margin: 0; }
+  dl.flag-counts dd { text-align: right; font-weight: 600; }
+  dl.flag-counts .total-cell { border-top: 2px solid var(--line); border-bottom: none; font-weight: 700; }
+
+  footer { color: var(--muted); font-size: 13.5px; border-top: 1px solid var(--line); padding-top: 16px; max-width: 75ch; display: grid; gap: 6px; }
+  .error { color: var(--caution-ink); background: var(--caution-bg); padding: 12px 14px; border-radius: 8px; }
+</style>
+
+<div class="banner" role="note"><strong>Synthetic data</strong>Every number here is generated by a program. None comes from a survivor or a program, and the patterns don't reflect real caseloads.</div>
+
+<div class="page">
+  <header class="intro">
+    <p class="eyebrow">Working demo · Mississippi</p>
+    <h1>Tech Abuse Patterns</h1>
+    <p class="lead">A dashboard for domestic violence advocates, funders and legislators in Mississippi. It shows which kinds of technology-facilitated abuse are rising, where, and how quickly survivors get a safety plan, without ever showing an individual.</p>
+    <div class="controls">
+      <div class="segmented" role="radiogroup" aria-label="Dataset">
+        <input type="radio" name="dataset" id="dataset-larger" value="larger" checked>
+        <label for="dataset-larger">Larger dataset · 5,000 records</label>
+        <input type="radio" name="dataset" id="dataset-smaller" value="smaller">
+        <label for="dataset-smaller">Smaller dataset · 250 records</label>
+      </div>
+      <p class="hint">Switch to the smaller dataset to see protection at work: with fewer records, more counts fall below 11 and are hidden.</p>
+    </div>
+    <p id="as-of"></p>
+  </header>
+
+  <aside class="protection" aria-labelledby="protection-heading">
+    <h2 id="protection-heading">How the numbers are protected</h2>
+    <ul>
+      <li>Only totals are shown. No individual record reaches this page.</li>
+      <li>Any count below 11 is hidden, along with any number that could be used to work one out.</li>
+      <li>A 0 means no reports. Zeros are never hidden, because gaps in support matter.</li>
+      <li>The finest detail recorded is a multi-county region and a calendar quarter.</li>
+      <li>The page re-checks the data before showing it, and refuses to display anything that fails.</li>
+    </ul>
+    <div class="legend">
+      <span><span class="chip-suppressed">suppressed</span> hidden to protect a small count</span>
+      <span><span class="chip-zero">0</span> no reports</span>
+    </div>
+  </aside>
+
+  <main id="views"></main>
+
+  <footer>
+    <p>This demo runs the dashboard's real rendering and checking code on two synthetic datasets. Regions A to F, the abuse categories and the threshold of 11 are placeholders until they're agreed with partner organizations.</p>
+    <p>No real survivor data will be used until a partner organization agrees and a confidentiality review is done.</p>
+  </footer>
+</div>
+
+<script type="application/json" id="data-larger">{{LARGER}}</script>
+<script type="application/json" id="data-smaller">{{SMALLER}}</script>
+
+<script type="module">
+  import { renderCard, renderCrossTab, renderFlagCounts, renderNote, renderSeries, renderStats } from "./js/dashboard/render.js";
+  import { validatePayload } from "./js/dashboard/validate.js";
+
+  // Plain-language names for the codes the pipeline uses. Applied only after the data passes the check.
+  const NAMES = {
+    spyware: "Spyware",
+    shared_account: "Shared account",
+    tracker: "Location tracker",
+    smart_home: "Smart home device",
+    impersonation: "Impersonation",
+    image_based: "Image-based abuse",
+    safety_plan: "Safety plan made",
+    evidence_preserved: "Evidence preserved",
+    protective_order_filed: "Protective order filed",
+  };
+  const nameOf = (label) => NAMES[label] ?? label.replace(/^(\d{4})-Q(\d)$/, "$1 Q$2");
+  const renameTable = (t) => ({ ...t, rowLabels: t.rowLabels.map(nameOf), colLabels: t.colLabels.map(nameOf) });
+
+  function markValues(root) {
+    for (const cell of root.querySelectorAll("td, dd")) {
+      if (cell.textContent === "suppressed") {
+        cell.classList.add("is-suppressed");
+        const chip = document.createElement("span");
+        chip.textContent = "suppressed";
+        cell.replaceChildren(chip);
+      } else if (cell.textContent === "0") {
+        cell.classList.add("is-zero");
+      }
+    }
+  }
+
+  function section(root, title, note) {
+    const el = document.createElement("section");
+    el.className = "audience";
+    const h = document.createElement("h2");
+    h.textContent = title;
+    el.appendChild(h);
+    const p = document.createElement("p");
+    p.className = "audience-note";
+    p.textContent = note;
+    el.appendChild(p);
+    const cards = document.createElement("div");
+    cards.className = "cards";
+    el.appendChild(cards);
+    root.appendChild(el);
+    return cards;
+  }
+
+  function render(name) {
+    const root = document.getElementById("views");
+    root.replaceChildren();
+    try {
+      const payload = JSON.parse(document.getElementById(`data-${name}`).textContent);
+      const { dataAsOf, data } = validatePayload(payload);
+      document.getElementById("as-of").textContent = `Data as of ${dataAsOf} · refreshed periodically, never in real time`;
+
+      const coalition = section(root, "For the state coalition", "Which kinds of tech abuse are rising, and where is there no support?");
+      renderCrossTab(renderCard(coalition, "Reports by abuse type, by quarter", "Which kinds of tech abuse are rising?"), renameTable(data.abuseTypeByQuarter));
+      const regions = renderCard(coalition, "Reports by abuse type, by region", "Where is there no support? A 0 means no reports.");
+      renderCrossTab(regions, renameTable(data.abuseTypeByRegion));
+      renderNote(regions, "Regions A to F are placeholders until real multi-county regions are agreed with partners.");
+
+      const funders = section(root, "For funders", "What gets accomplished, and how fast?");
+      funders.classList.add("pair");
+      const outcomes = renderCard(funders, "Outcomes reached", "A record can reach several outcomes, or none.");
+      renderFlagCounts(outcomes, data.outcomeCounts.map((c) => ({ ...c, label: nameOf(c.label) })));
+      renderNote(outcomes, "Not shown yet: how many advocates can take a tech-abuse case. That needs a data source beyond intake records.");
+      renderStats(renderCard(funders, "Days to safety plan, by quarter", "How fast do survivors get a safety plan?"), data.daysToSafetyPlanByQuarter.map((s) => ({ ...s, label: nameOf(s.label) })));
+
+      const legislators = section(root, "For legislators", "What does tech abuse look like in Mississippi, in numbers?");
+      renderSeries(renderCard(legislators, "Statewide totals by abuse type", "Reports in the period shown, by type."), renameTable(data.abuseTypeTotals));
+
+      markValues(root);
+    } catch (error) {
+      const p = document.createElement("p");
+      p.className = "error";
+      p.textContent = `This data couldn't be shown: ${error instanceof Error ? error.message : String(error)}`;
+      root.appendChild(p);
+    }
+  }
+
+  const choice = location.hash === "#smaller" ? "smaller" : "larger";
+  document.getElementById(`dataset-${choice}`).checked = true;
+  for (const input of document.querySelectorAll('input[name="dataset"]')) {
+    input.addEventListener("change", () => render(input.value));
+  }
+  render(choice);
+</script>
