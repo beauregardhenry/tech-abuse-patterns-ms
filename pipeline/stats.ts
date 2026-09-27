@@ -1,5 +1,5 @@
 import type { IntakeRecord } from "../schema/index.js";
-import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD } from "./disclosure.js";
+import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD } from "../shared/disclosure.js";
 import type { Dimension } from "./aggregate.js";
 
 export interface SuppressedStat {

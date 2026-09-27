@@ -12,7 +12,8 @@ export default defineConfig({
       // either here would swamp the real signal from schema/generator/
       // pipeline with code this suite structurally cannot reach. dashboard/validate.ts is the
       // exception: it's the renderer's pure-logic safety check, not UI, and is unit-tested.
-      include: ["schema/**", "generator/**", "pipeline/**", "dashboard/validate.ts"],
+      // shared/ holds the disclosure rules the pipeline and that check both run.
+      include: ["schema/**", "generator/**", "pipeline/**", "shared/**", "dashboard/validate.ts"],
       exclude: ["**/*.d.ts"],
     },
   },

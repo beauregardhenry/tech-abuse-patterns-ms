@@ -1,5 +1,5 @@
 import { OUTCOMES, type IntakeRecord, type Outcome } from "../schema/index.js";
-import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD } from "./disclosure.js";
+import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD } from "../shared/disclosure.js";
 
 export interface SuppressedFlagCount {
   label: Outcome;

@@ -1,4 +1,4 @@
-import { assertValidThreshold, augmentedLines, DEFAULT_SUPPRESSION_THRESHOLD, lineViolation, type Coord } from "./disclosure.js";
+import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD, findDisclosures, type Coord } from "../shared/disclosure.js";
 import type { RawTable, SuppressedTable } from "./types.js";
 
 /** Margins another table has already hidden, which this table must hide too (see runPipeline). */
@@ -8,19 +8,18 @@ export interface ForcedMargins {
 }
 
 /**
- * Cell suppression for a 2-way table, totals included (see pipeline/disclosure.ts):
+ * Cell suppression for a 2-way table, totals included (see shared/disclosure.ts):
  *
  *   1. Primary: every value -- cell, row total, column total, grand total -- from 1 to k-1 is
  *      hidden. A genuine zero is never hidden.
- *   2. Complementary: while any line of the augmented matrix discloses something (exactly one
- *      hidden value, or hidden values whose derived sum is below k), hide one more of its values:
- *      the smallest shown non-zero part, or the line's total if no part qualifies. Every shown
- *      non-zero value is already >= k, so one addition always resolves the line it was chosen for.
+ *   2. Complementary: while any combination of lines gives a hidden value away (one recoverable
+ *      value, or hidden values whose exact sum is below k or pins them to 1), hide one more value
+ *      crossing that combination: a cell before a total, the smallest first. Every shown non-zero
+ *      value is at least k, so the extra value always makes that combination safe: it either adds
+ *      at least k to the exact sum or turns the sum into a difference that pins nothing.
  *
- * Each step hides one more value and the matrix is finite, so this always terminates.
- *
- * Known limitation (see docs/PRIVACY.md): this checks each line on its own. It does not run a full
- * linear-programming audit over combinations of lines, which is the harder general problem.
+ * Each step hides one more value and the matrix is finite, so this always terminates. Hiding every
+ * non-zero value is always safe (zeros cross nothing), so it never runs out of candidates.
  */
 export function suppressTable(
   raw: RawTable,
@@ -43,16 +42,16 @@ export function suppressTable(
   if (forced.grandTotal && value[R]![C]! > 0) hidden[R]![C] = true;
 
   const at = ([i, j]: Coord) => (hidden[i]![j] ? null : value[i]![j]!);
-  const lines = augmentedLines(raw.rowLabels, raw.colLabels);
+  const grid = { rowLabels: raw.rowLabels, colLabels: raw.colLabels, at };
   const maxSteps = (R + 1) * (C + 1);
 
   for (let step = 0; ; step++) {
     if (step > maxSteps) {
       throw new Error("suppression did not converge; refusing to emit a table");
     }
-    const unsafe = lines.find((line) => lineViolation(line, at, k) !== null);
+    const [unsafe] = findDisclosures(grid, k, true);
     if (!unsafe) break;
-    const [vi, vj] = pickVictim(unsafe.parts, unsafe.total, value, hidden);
+    const [vi, vj] = pickVictim(unsafe.crossingShown, value, R, C);
     hidden[vi]![vj] = true;
   }
 
@@ -70,18 +69,17 @@ export function suppressTable(
 }
 
 /**
- * Smallest shown non-zero part of the line, falling back to its total. Never a genuine zero:
- * zeros carry no disclosive magnitude, and hiding one would break the "every hidden value is at
- * least 1" reasoning the hidden-mass rule depends on.
+ * The value to hide next, from the shown non-zero values crossing an unsafe combination: a cell
+ * before a row or column total, a total before the grand total, then the smallest. Never a zero:
+ * zeros carry no disclosive magnitude, and every hidden value being at least 1 is what the
+ * disclosure rules rely on.
  */
-function pickVictim(parts: readonly Coord[], total: Coord, value: number[][], hidden: boolean[][]): Coord {
+function pickVictim(candidates: readonly Coord[], value: number[][], R: number, C: number): Coord {
+  const rank = ([i, j]: Coord) => (i === R ? 1 : 0) + (j === C ? 1 : 0);
   let best: Coord | null = null;
-  for (const [i, j] of parts) {
-    if (hidden[i]![j] || value[i]![j] === 0) continue;
-    if (best === null || value[i]![j]! < value[best[0]]![best[1]]!) best = [i, j];
+  for (const c of candidates) {
+    if (best === null || rank(c) < rank(best) || (rank(c) === rank(best) && value[c[0]]![c[1]]! < value[best[0]]![best[1]]!)) best = c;
   }
-  if (best) return best;
-  const [ti, tj] = total;
-  if (!hidden[ti]![tj] && value[ti]![tj]! > 0) return total;
-  throw new Error("no value left to suppress in an unsafe line; refusing to emit a table");
+  if (!best) throw new Error("no value left to suppress in an unsafe combination; refusing to emit a table");
+  return best;
 }

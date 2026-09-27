@@ -275,6 +275,13 @@ describe("runPipeline — input boundary", () => {
     expect(() => runPipeline(recordsWith(20, { quarter: "2024-Q4" }), ["2025-Q1"])).toThrow(/outside the requested quarters/);
   });
 
+  it("rejects requested quarters that are empty, malformed or repeated", () => {
+    expect(() => runPipeline([], [])).toThrow(/no quarters requested/);
+    expect(() => runPipeline([], ["2025-Q5"])).toThrow(/not a YYYY-Qn label/);
+    // A repeated label would publish an all-zero column next to a copy of the first one's statistics.
+    expect(() => runPipeline(recordsWith(20), ["2025-Q1", "2025-Q1"])).toThrow(/repeat a label/);
+  });
+
   it("refuses a threshold that would disable suppression", () => {
     for (const k of [0, 1, 2.5, Number.NaN]) {
       expect(() => runPipeline(recordsWith(20), ["2025-Q1"], k), `k=${k}`).toThrow(/threshold/);

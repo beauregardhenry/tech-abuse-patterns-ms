@@ -19,7 +19,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SOURCE_DIRS = ["schema", "generator", "pipeline", "dashboard"];
+const SOURCE_DIRS = ["schema", "generator", "pipeline", "shared", "dashboard"];
 
 interface Pattern {
   label: string;

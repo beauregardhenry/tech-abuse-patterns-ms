@@ -1,8 +1,9 @@
-import { ABUSE_TYPES, IntakeRecordSchema, REGIONS, type IntakeRecord } from "../schema/index.js";
+import { ABUSE_TYPES, IntakeRecordSchema, QUARTER_PATTERN, REGIONS, type IntakeRecord } from "../schema/index.js";
 import { buildCrossTab, type Dimension } from "./aggregate.js";
-import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD } from "./disclosure.js";
+import { assertValidThreshold, DEFAULT_SUPPRESSION_THRESHOLD } from "../shared/disclosure.js";
 import { suppressTable } from "./suppress.js";
 import { findSuppressionViolations } from "./audit.js";
+import { linkedTableViolations } from "../shared/linked.js";
 import { countOutcomeFlags, type SuppressedFlagCount } from "./outcomes.js";
 import { computeDaysToSafetyPlanStats, type SuppressedStat } from "./stats.js";
 import { labelSynthetic } from "./label.js";
@@ -10,7 +11,8 @@ import type { LabelledOutput, RawTable, SuppressedTable } from "./types.js";
 
 export * from "./types.js";
 export * from "./aggregate.js";
-export * from "./disclosure.js";
+export * from "../shared/disclosure.js";
+export * from "../shared/linked.js";
 export * from "./suppress.js";
 export * from "./audit.js";
 export * from "./outcomes.js";
@@ -37,6 +39,18 @@ function regionDimension(): Dimension {
 
 function quarterDimension(quarters: readonly string[]): Dimension {
   return { name: "quarter", labels: quarters, keyOf: (r) => r.quarter };
+}
+
+/** The quarters to report on: at least one, each a well-formed YYYY-Qn label, none repeated. */
+function validateQuarters(quarters: readonly string[]): void {
+  if (quarters.length === 0) throw new Error("no quarters requested; refusing to build empty tables");
+  const bad = quarters.findIndex((q) => typeof q !== "string" || !QUARTER_PATTERN.test(q));
+  if (bad !== -1) throw new Error(`requested quarter ${bad} is not a YYYY-Qn label`);
+  if (new Set(quarters).size !== quarters.length) {
+    // A repeated label would get an all-zero column in the tables but a copy of the first
+    // occurrence's statistics, so the published numbers would contradict each other.
+    throw new Error("requested quarters repeat a label; refusing to build inconsistent tables");
+  }
 }
 
 /** Schema-validates every record at the pipeline's input boundary, failing closed. */
@@ -122,6 +136,7 @@ export function runPipeline(
   k: number = DEFAULT_SUPPRESSION_THRESHOLD,
 ): LabelledOutput<DashboardAggregates> {
   assertValidThreshold(k);
+  validateQuarters(quarters);
   const records = validateRecords(input);
 
   // Every table must see the same records. A record outside `quarters` would be counted by the
@@ -141,11 +156,20 @@ export function runPipeline(
   );
   const abuseTypeTotals = seriesFromRowTotals(abuseTypeByRegion);
 
+  // Violation messages name where and which rule, never a value, so they are safe to surface.
   for (const table of [abuseTypeByQuarter, abuseTypeByRegion, abuseTypeTotals]) {
     const violations = findSuppressionViolations(table);
     if (violations.length > 0) {
       throw new Error(`pipeline refused to emit an unsafe table (${table.rowDimension} x ${table.colDimension}): ${violations.join("; ")}`);
     }
+  }
+  const linked = linkedTableViolations([
+    { name: "the by-quarter table", table: abuseTypeByQuarter },
+    { name: "the by-region table", table: abuseTypeByRegion },
+    { name: "the statewide totals", table: abuseTypeTotals },
+  ]);
+  if (linked.length > 0) {
+    throw new Error(`pipeline refused to emit tables that are unsafe together: ${linked.join("; ")}`);
   }
 
   const daysToSafetyPlanByQuarter = computeDaysToSafetyPlanStats(

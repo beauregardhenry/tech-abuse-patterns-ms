@@ -3,6 +3,7 @@ import { ABUSE_TYPES, REGIONS, type IntakeRecord } from "../schema/index.js";
 import { buildCrossTab, type Dimension } from "../pipeline/aggregate.js";
 import { suppressTable } from "../pipeline/suppress.js";
 import { findSuppressionViolations } from "../pipeline/audit.js";
+import { linkedTableViolations } from "../shared/linked.js";
 import { backCalculableTotalFixture, justUnderKFixture, sparseRegionFixture } from "../generator/fixtures.js";
 
 const abuseTypeDimension: Dimension = {
@@ -152,7 +153,9 @@ describe("findSuppressionViolations — catches each disclosure pattern", () => 
       colTotals: [null, null, 50],
       grandTotal: 52,
     });
-    expect(violations.some((v) => v.includes('row "spyware"') && v.includes("add up to 2"))).toBe(true);
+    expect(violations.some((v) => v.includes('row "spyware"') && v.includes("sum is below k=11"))).toBe(true);
+    // Messages reach logs and the page, so they never carry the value they protect.
+    expect(violations.every((v) => !/\b2\b/.test(v))).toBe(true);
   });
 
   it("flags a hidden total recoverable as the grand total minus the other totals", () => {
@@ -165,7 +168,7 @@ describe("findSuppressionViolations — catches each disclosure pattern", () => 
       colTotals: [55],
       grandTotal: 55,
     });
-    expect(violations.some((v) => v.startsWith("row totals:"))).toBe(true);
+    expect(violations.some((v) => v.startsWith("the row totals:") && v.includes("recoverable"))).toBe(true);
   });
 
   it("flags a shown total below k, not just a shown cell", () => {
@@ -178,7 +181,8 @@ describe("findSuppressionViolations — catches each disclosure pattern", () => 
       colTotals: [null],
       grandTotal: 5,
     });
-    expect(violations.some((v) => v.includes("grand total = 5"))).toBe(true);
+    expect(violations.some((v) => v.includes("grand total is shown although it is below k=11"))).toBe(true);
+    expect(violations.every((v) => !v.includes("5"))).toBe(true);
   });
 
   it("flags a threshold that would protect nothing", () => {
@@ -194,5 +198,106 @@ describe("findSuppressionViolations — catches each disclosure pattern", () => 
     });
     expect(violations).toHaveLength(1);
     expect(violations[0]).toMatch(/not an integer >= 2/);
+  });
+});
+
+describe("combinations of lines — values no single line gives away", () => {
+  // A real case the per-line rule missed (synthetic seed 23, 316 records): every row and column had
+  // at least two hidden values, each line's hidden values summed to at least k, and yet the
+  // impersonation row's two hidden cells were the only link between two separate groups of hidden
+  // cells. Combining the Q1 and Q4 columns with the spyware and tracker rows recovers
+  // impersonation/Q1 = 10 exactly, and then the impersonation row gives impersonation/Q2 = 7.
+  const quarterLabels = ["2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4"];
+  const truth = [
+    [13, 16, 15, 11],
+    [16, 14, 12, 14],
+    [11, 18, 13, 12],
+    [15, 12, 12, 13],
+    [10, 7, 16, 14],
+    [15, 14, 5, 18],
+  ];
+  const oldOutput = {
+    rowDimension: "abuse_type",
+    colDimension: "quarter",
+    rowLabels: [...ABUSE_TYPES],
+    colLabels: quarterLabels,
+    cells: [
+      [null, 16, 15, null],
+      [16, null, null, 14],
+      [null, 18, 13, null],
+      [15, 12, 12, 13],
+      [null, null, 16, 14],
+      [15, null, null, 18],
+    ],
+    rowTotals: [55, 56, 54, 52, 47, 52],
+    colTotals: [80, 81, 73, 82],
+    grandTotal: 316,
+    suppressionThreshold: 11,
+  };
+
+  it("flags the published table the per-line rule let through, without quoting the recovered values", () => {
+    const violations = findSuppressionViolations(oldOutput);
+    expect(violations.some((v) => v.includes("combined") && v.includes("recoverable"))).toBe(true);
+    expect(violations.join(" ")).not.toMatch(/\b(7|10)\b/);
+    // An independent method agrees: exact linear algebra over the same equations.
+    expect(linkedTableViolations([{ name: "the table", table: oldOutput }]).join(" ")).toContain("impersonation, 2025-Q2");
+  });
+
+  it("suppresses that table so no hidden value is recoverable by any combination of lines", () => {
+    const table = suppressTable(
+      { rowDimension: "abuse_type", colDimension: "quarter", rowLabels: [...ABUSE_TYPES], colLabels: quarterLabels, matrix: truth },
+      11,
+    );
+    expect(findSuppressionViolations(table)).toEqual([]);
+    expect(linkedTableViolations([{ name: "the table", table }])).toEqual([]);
+  });
+
+  it("flags hidden values whose exact sum equals their number, which pins each to 1 (small k)", () => {
+    // Three hidden 1s next to a shown row total of 3: with k=3 the sum clears k, but three values of
+    // at least 1 adding up to 3 must all be exactly 1.
+    const pinned = {
+      rowDimension: "r",
+      colDimension: "c",
+      rowLabels: ["a", "b", "c"],
+      colLabels: ["x", "y", "z"],
+      cells: [
+        [null, null, null],
+        [5, 5, 5],
+        [5, 5, 5],
+      ],
+      rowTotals: [3, 15, 15],
+      colTotals: [null, null, null],
+      grandTotal: 33,
+      suppressionThreshold: 3,
+    };
+    expect(findSuppressionViolations(pinned).some((v) => v.includes("pinning each to exactly 1"))).toBe(true);
+    const table = suppressTable({ rowDimension: "r", colDimension: "c", rowLabels: ["a", "b", "c"], colLabels: ["x", "y", "z"], matrix: [[1, 1, 1], [5, 5, 5], [5, 5, 5]] }, 3);
+    expect(findSuppressionViolations(table)).toEqual([]);
+  });
+
+  it("refuses a table too large to check every combination, rather than checking less", () => {
+    // 11 x 11 cells, all small, so every line is linked: 24 lines in one group.
+    const matrix = Array.from({ length: 11 }, () => Array.from({ length: 11 }, () => 1));
+    const labels = matrix.map((_, i) => `l${i}`);
+    expect(() => suppressTable({ rowDimension: "r", colDimension: "c", rowLabels: labels, colLabels: labels, matrix }, 11)).toThrow(/too many to check/);
+  });
+
+  it("agrees with exact linear algebra across many random sparse tables and thresholds", () => {
+    // Two independent methods: suppression works from combinations of lines; the check below solves
+    // the table's equations exactly. No hidden value may be pinned down by either.
+    let seed = 7;
+    const next = () => ((seed = (seed * 1103515245 + 12345) % 2147483648), seed / 2147483648);
+    for (let run = 0; run < 300; run++) {
+      const k = [2, 3, 5, 11][run % 4]!;
+      const rows = 2 + (run % 5);
+      const cols = 2 + ((run >> 2) % 5);
+      const matrix = Array.from({ length: rows }, () => Array.from({ length: cols }, () => (next() < 0.2 ? 0 : Math.floor(next() * 3 * k))));
+      const table = suppressTable(
+        { rowDimension: "r", colDimension: "c", rowLabels: matrix.map((_, i) => `r${i}`), colLabels: matrix[0]!.map((_, j) => `c${j}`), matrix },
+        k,
+      );
+      expect(findSuppressionViolations(table), `run ${run}`).toEqual([]);
+      expect(linkedTableViolations([{ name: "the table", table }]), `run ${run}`).toEqual([]);
+    }
   });
 });

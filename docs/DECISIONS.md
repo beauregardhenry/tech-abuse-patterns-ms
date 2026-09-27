@@ -23,11 +23,26 @@ What was rejected, what was chosen and why, and what's still open. See `docs/PRI
 
 Choices made in that pass:
 
-- **Totals are treated as cells.** Every row and column of the table-plus-totals matrix is checked by one shared rule (`pipeline/disclosure.ts`). This replaced separate row, column and grand-total checks that never protected the totals themselves.
+- **Totals are treated as cells.** Every row and column of the table-plus-totals matrix is checked by one shared rule (`shared/disclosure.ts`). This replaced separate row, column and grand-total checks that never protected the totals themselves.
 - **Hidden values in a line with a shown total must add up to at least k.** This was chosen over tracking each hidden value's possible range: it's the same threshold rule applied to a derived count, so it's easy to explain and to audit.
 - **Shared totals are hidden identically across tables.** The statewide-totals view is now derived from the cross-tabs' shared totals, not suppressed on its own.
 - **The median replaced the mean** for days to safety plan, so no single record can dominate the published figure.
 - **"Suppressed" replaced "hidden (<11)"** as the label, because the "<11" bound was false for values hidden to protect others.
+
+**Second hardening pass: combinations of lines.** A second review tested the rules against exact linear algebra, not just against each line. It reproduced these problems:
+
+- **Leaks from combining lines.** In 59 of 3,000 randomized pipeline runs, a hidden value could be worked out exactly by combining several rows and columns, though every line on its own passed the audit. One was a count of 7 at k=11. The pattern: a hidden cell that was the only link between two separate groups of hidden cells.
+- **Values pinned to 1 at small k.** With k of 2 or 3, three hidden 1s next to a shown total of 3 passed the audit, though each must be exactly 1.
+- **A weak dashboard check.** The dashboard's check didn't run the audit, so a file with one recoverable hidden value rendered.
+- **Values in error messages.** Error messages quoted the values they rejected. The dashboard shows its error on the page, so a rejected small count would have been displayed anyway.
+- **Repeated quarters.** A repeated requested quarter produced a zero column next to copied statistics.
+
+Each problem now has a regression test, and the audit rejects each one. Choices made in that pass:
+
+- **Every combination of lines in a table is checked exhaustively**, each line used once. A linear-programming solver in the style of τ-ARGUS was rejected: it would need a solver dependency or a hand-written simplex method in the privacy-critical path. A table here has at most 14 lines, so exhaustive search is small, fast and easy to audit. What it doesn't cover is listed in `docs/PRIVACY.md` under "Known limitations".
+- **Across tables, an exact check fails closed rather than fixing itself.** Shared totals must match, and no hidden value may be recoverable from all the tables' equations together, checked exactly over the rationals. It has never fired in 12,000 randomized runs, so an automatic fix would be untested code in the privacy path. Refusing to publish is the safe failure.
+- **One set of rules in `shared/`**, compiled into both the pipeline and the dashboard. The dashboard's check now runs the same audit, not a weaker copy. `shared/` may never import `schema/`, `generator/` or `pipeline/`, and a test enforces it.
+- **Violation messages name the place and the rule, never the value.**
 
 **Records are validated where they enter the pipeline, and errors never echo record content.** `runPipeline` takes `unknown[]`, not a TypeScript type the data was never checked against. A validation error names only the record index, field paths and issue codes. A more helpful error that quoted the offending value was rejected, because the whole point of this pipeline is that record content never reaches any output, logs included.
 
@@ -39,7 +54,7 @@ Choices made in that pass:
 
 ## Open questions (carried over from the spec, still open)
 
-- **Suppression threshold and method.** Implemented with a default of k=11, primary and complementary cell suppression, and a rule that the hidden values in any line with a shown total must add up to at least k (see `docs/PRIVACY.md`). None of this is confirmed as the right threshold or method for this context yet; that's the partner organization's or a statistician's call, not an engineering one. The review should also cover the known gap: each line is checked on its own, not every combination of lines.
+- **Suppression threshold and method.** Implemented with a default of k=11, primary and complementary cell suppression, and rules that stop any combination of lines from recovering a hidden value or an exact sum below k (see `docs/PRIVACY.md`). None of this is confirmed as the right threshold or method for this context yet; that's the partner organization's or a statistician's call, not an engineering one. The review should also cover what's still unchecked: the ranges a viewer can narrow hidden values to, weighted combinations of lines, and small sums across tables.
 - **Upper bound on `days_to_safety_plan`.** Set to 365 (`MAX_DAYS_TO_SAFETY_PLAN`) as a placeholder, so garbage values are rejected at intake. The real bound, and whether a legitimately longer wait should be capped or stored differently, needs advocate input.
 - **Region definitions.** `Region A`–`F` are placeholders. The real multi-county regions need to come from the coalition; per the spec, they must never be county-level. Mississippi may have only about 10 domestic violence programs (see `docs/EXISTING_DATA.md`). A region served by a single program would show that program's caseload, so region boundaries also need to avoid identifying programs.
 - **Final `finding_detail`/`platform` lists.** Current lists in `schema/intakeRecord.ts` are a starting scaffold. The real lists need to come from ISDi/Sherloc output and advocate input (see the sources linked in the original spec).
