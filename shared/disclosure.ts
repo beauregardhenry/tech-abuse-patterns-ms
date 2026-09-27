@@ -209,8 +209,8 @@ function subsetsOf(n: number): number[] {
   const cached = subsetCache.get(n);
   if (cached) return cached;
   const masks = Array.from({ length: (1 << (n - 1)) - 1 }, (_, m) => (m + 1) << 1);
-  const bits = (m: number) => m.toString(2).replace(/0/g, "").length;
-  masks.sort((a, b) => bits(a) - bits(b) || a - b);
+  const bits = new Map(masks.map((m) => [m, m.toString(2).replace(/0/g, "").length]));
+  masks.sort((a, b) => bits.get(a)! - bits.get(b)! || a - b);
   subsetCache.set(n, masks);
   return masks;
 }
@@ -222,36 +222,102 @@ function subsetsOf(n: number): number[] {
  */
 export function findDisclosures(grid: Grid, k: number, firstOnly = false): Disclosure[] {
   const layout = layoutOf(grid);
+  const fast = prepare(grid, layout);
   const inSet = new Uint8Array(layout.lineCount);
+  const members = new Int32Array(layout.lineCount);
   const found: Disclosure[] = [];
   // One report per distinct set of exposed hidden values, however many combinations expose it.
   const seen = new Set<string>();
-  const keep = (d: Disclosure | null): boolean => {
-    if (!d) return false;
+  // Only called once the fast check has flagged a combination: builds the report the slow way.
+  const report = (size: number, singleLine: boolean): boolean => {
+    const lines = Array.from(members.subarray(0, size));
+    const d = checkCombination(lines, inSet, grid, layout, k, singleLine);
+    if (!d) throw new Error("disclosure checks disagree; refusing to treat the table as safe");
     const key = d.hidden.length === 0 ? `consistency ${d.message}` : d.hidden.map(([i, j]) => `${i},${j}`).sort().join(" ");
     if (seen.has(key)) return false;
     seen.add(key);
     found.push(d);
     return true;
   };
+
   for (let line = 0; line < layout.lineCount; line++) {
+    members[0] = line;
     inSet[line] = 1;
-    const kept = keep(checkCombination([line], inSet, grid, layout, k, true));
+    const kept = isUnsafe(members, 1, inSet, fast, k, true) && report(1, true);
     inSet[line] = 0;
     if (kept && firstOnly) return found;
   }
   for (const group of hiddenGroups(grid, layout)) {
     if (group.length < 3) continue; // two lines: each alone was already checked, and they're complements
     for (const mask of subsetsOf(group.length)) {
-      const lines = group.filter((_, b) => (mask >> b) & 1);
-      if (lines.length < 2 || group.length - lines.length < 2) continue; // a single line, or its complement
-      for (const line of lines) inSet[line] = 1;
-      const kept = keep(checkCombination(lines, inSet, grid, layout, k, false));
-      for (const line of lines) inSet[line] = 0;
+      let size = 0;
+      for (let b = 1; b < group.length; b++) {
+        if ((mask >> b) & 1) members[size++] = group[b]!;
+      }
+      if (size < 2 || group.length - size < 2) continue; // a single line, or its complement
+      for (let m = 0; m < size; m++) inSet[members[m]!] = 1;
+      const kept = isUnsafe(members, size, inSet, fast, k, false) && report(size, false);
+      for (let m = 0; m < size; m++) inSet[members[m]!] = 0;
       if (kept && firstOnly) return found;
     }
   }
   return found;
+}
+
+// The same rules as checkCombination, as a yes/no over flat arrays with no allocation: it runs for
+// every combination, and checkCombination only for the ones it flags.
+interface Prepared {
+  /** Published value per augmented cell (index i * (C + 1) + j), NaN where suppressed. */
+  value: Float64Array;
+  /** Per line: its cells' indices, the other line each cell sits on, and the cell's sign. */
+  cells: Int32Array[];
+  others: Int32Array[];
+  signs: Int8Array[];
+}
+
+function prepare(grid: Grid, layout: Layout): Prepared {
+  const width = layout.C + 1;
+  const value = new Float64Array((layout.R + 1) * width);
+  for (let i = 0; i <= layout.R; i++) {
+    for (let j = 0; j <= layout.C; j++) value[i * width + j] = grid.at([i, j]) ?? Number.NaN;
+  }
+  const perLine = layout.cells.map((coords, line) => {
+    const isRow = line <= layout.R;
+    return {
+      cells: Int32Array.from(coords, ([i, j]) => i * width + j),
+      others: Int32Array.from(coords, ([i, j]) => (isRow ? layout.R + 1 + j : i)),
+      signs: Int8Array.from(coords, (coord) => (isRow ? rowSideSign(coord, layout) : -rowSideSign(coord, layout))),
+    };
+  });
+  return { value, cells: perLine.map((l) => l.cells), others: perLine.map((l) => l.others), signs: perLine.map((l) => l.signs) };
+}
+
+function isUnsafe(members: Int32Array, size: number, inSet: Uint8Array, p: Prepared, k: number, singleLine: boolean): boolean {
+  let hidden = 0;
+  let firstSign = 0;
+  let shownSum = 0;
+  for (let m = 0; m < size; m++) {
+    const line = members[m]!;
+    const cells = p.cells[line]!;
+    const others = p.others[line]!;
+    const signs = p.signs[line]!;
+    for (let c = 0; c < cells.length; c++) {
+      if (inSet[others[c]!]) continue;
+      const v = p.value[cells[c]!]!;
+      const sign = signs[c]!;
+      if (Number.isNaN(v)) {
+        hidden++;
+        if (firstSign === 0) firstSign = sign;
+        else if (sign !== firstSign) return false; // two hidden values of opposite sign: pins nothing
+      } else {
+        shownSum += sign * v;
+      }
+    }
+  }
+  if (hidden === 0) return singleLine && shownSum !== 0;
+  if (hidden === 1) return true;
+  const derived = -firstSign * shownSum;
+  return derived < k || derived <= hidden;
 }
 
 /**
