@@ -2,4 +2,4 @@
 # Raised automatically by .github/workflows/coverage-ratchet.yml on every push to
 # main; don't bump it from a feature branch (see the header of this script). Lower
 # it only deliberately, with a reason in the commit.
-97.05
+97.95
