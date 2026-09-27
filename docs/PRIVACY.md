@@ -21,24 +21,29 @@ A shown cell is the obvious case. Less obvious cases, each of which the first ve
 
 ### 1. Hide small counts
 
-Every value from 1 to k-1 is suppressed: cells, row totals, column totals and the grand total (`pipeline/suppress.ts`). `k` defaults to 11 (`DEFAULT_SUPPRESSION_THRESHOLD` in `pipeline/disclosure.ts`). It is a parameter on every function that needs it; nothing hardcodes 11 outside that one constant. **The default of 11 is a placeholder.** It was chosen because it matches a threshold some health-data programs use (e.g. CMS), not because it has been validated for this context. The spec says the right threshold has to be confirmed with the partner organization; see `docs/DECISIONS.md`.
+Every value from 1 to k-1 is suppressed: cells, row totals, column totals and the grand total (`pipeline/suppress.ts`). `k` defaults to 11 (`DEFAULT_SUPPRESSION_THRESHOLD` in `shared/disclosure.ts`). It is a parameter on every function that needs it; nothing hardcodes 11 outside that one constant. **The default of 11 is a placeholder.** It was chosen because it matches a threshold some health-data programs use (e.g. CMS), not because it has been validated for this context. The spec says the right threshold has to be confirmed with the partner organization; see `docs/DECISIONS.md`.
 
-**An invalid threshold fails closed.** A `k` below 2, a fraction or `NaN` would suppress nothing. `assertValidThreshold` (in `pipeline/disclosure.ts`) makes every entry point throw instead: `runPipeline`, `suppressTable`, `countOutcomeFlags` and `computeDaysToSafetyPlanStats`. The audit reports such a threshold as a violation too.
+**An invalid threshold fails closed.** A `k` below 2, a fraction or `NaN` would suppress nothing. `assertValidThreshold` (in `shared/disclosure.ts`) makes every entry point throw instead: `runPipeline`, `suppressTable`, `countOutcomeFlags` and `computeDaysToSafetyPlanStats`. The audit reports such a threshold as a violation too.
 
-A **genuine zero is never suppressed.** A 0 means no records exist for that combination, so there is no one's data to protect, and hiding it would destroy the "where is there no support" signal the state coalition needs. The victim-selection step in `pipeline/suppress.ts` never picks a zero. The "hidden mass" rule below also depends on this: because hidden values are never 0, a viewer knows every hidden value is at least 1.
+A **genuine zero is never suppressed.** A 0 means no records exist for that combination, so there is no one's data to protect, and hiding it would destroy the "where is there no support" signal the state coalition needs. The victim-selection step in `pipeline/suppress.ts` never picks a zero. The exact-sum rules below also depend on this: because hidden values are never 0, a viewer knows every hidden value is at least 1.
 
 ### 2. Hide back-calculable counts
 
-`pipeline/disclosure.ts` holds the rule. The algorithm (`suppressTable`) and the audit (`findSuppressionViolations`) both use it, so the two can't disagree about what "safe" means.
+`shared/disclosure.ts` holds the rules. The algorithm (`suppressTable`), the pipeline's audit (`findSuppressionViolations`) and the dashboard's own check (`dashboard/validate.ts`) all use it, so the three can't disagree about what "safe" means.
 
-A table is treated as an augmented matrix: the cells, plus a totals column, a totals row and the grand total in the corner. Every row and every column of that matrix is a line where the parts add up to the total. That includes the totals row (column totals summing to the grand total) and the totals column (row totals summing to the grand total). For each line:
+A table is treated as an augmented matrix: the cells, plus a totals column, a totals row and the grand total in the corner. Every row and every column of that matrix is a line where the parts add up to the total. That includes the totals row (column totals summing to the grand total) and the totals column (row totals summing to the grand total).
 
-- **It must hide none of its values, or at least two.** A single hidden value is always recoverable by subtraction, whether it's a cell or the total.
-- **When its total is shown, the hidden values must add up to at least k.** "Total minus shown values" is the exact combined size of what's hidden, so it's a derivable count like any other.
+A viewer can add and subtract any combination of those lines, not just read one at a time. Combining a set of lines cancels every value whose row and column are both in the set, and leaves an equation over the values that cross it. So for **every combination of lines** in a table:
 
-`suppressTable` hides everything from 1 to k-1, then repeatedly finds a line that breaks either rule and hides one more of its values. It picks the smallest shown non-zero part, or the line's total if no part qualifies. Every shown non-zero value is already at least k, so one extra value always fixes the line it was chosen for. Each step hides one more value, so the loop ends.
+- **One hidden value crossing it is recoverable outright**, whatever its size. For a single line, that's the familiar "total minus the shown parts".
+- **When the hidden values crossing it add up exactly, their sum must be at least k.** It's a derivable count like any other. For a single line with a shown total, that's "total minus shown values".
+- **That sum must also be more than the number of hidden values.** Hidden values are never 0, so three hidden values adding up to exactly 3 are all exactly 1. This only bites when k is small (a line here has at most seven values), but k is configurable.
 
-**Tables that share totals are suppressed together** (`suppressWithSharedRowMargins` in `pipeline/index.ts`). The by-quarter and by-region tables share their per-abuse-type row totals and the grand total. If they were suppressed independently, a total hidden in one could be read straight off the other. They're suppressed in rounds, and any shared total hidden in either table is forced hidden in both, until nothing changes. The statewide-totals view (`abuseTypeTotals`) isn't suppressed on its own at all. It's built from the harmonized row totals, so it can't disagree with the tables it summarizes. `runPipeline` also rejects any record whose quarter isn't one of the requested quarters. Such a record would be counted by the region table but not the quarter table, and the difference between their totals would itself be a derivable count.
+A table has at most 14 lines, and only lines touching a hidden value matter, so every combination is checked exhaustively, not sampled.
+
+`suppressTable` hides everything from 1 to k-1, then repeatedly finds a combination that breaks a rule, checking single lines first, and hides one more value crossing it: a cell before a total, the smallest first. Every shown non-zero value is already at least k, so one extra value always fixes the combination it was chosen for: it adds at least k to the exact sum, or turns the sum into a difference that pins nothing. Each step hides one more value, so the loop ends. A combination that gives something away always has a shown non-zero value crossing it, so the loop never runs out of candidates.
+
+**Tables that share totals are suppressed together** (`suppressWithSharedRowMargins` in `pipeline/index.ts`). The by-quarter and by-region tables share their per-abuse-type row totals and the grand total. If they were suppressed independently, a total hidden in one could be read straight off the other. They're suppressed in rounds, and any shared total hidden in either table is forced hidden in both, until nothing changes. Then `shared/linked.ts` checks the tables together: their shared totals must match exactly, shown or hidden alike, and no hidden value may be exactly recoverable from all their equations combined. That second check is exact linear algebra over the rationals, with no rounding. The statewide-totals view (`abuseTypeTotals`) isn't suppressed on its own at all. It's built from the harmonized row totals, so it can't disagree with the tables it summarizes. `runPipeline` also rejects any record whose quarter isn't one of the requested quarters. Such a record would be counted by the region table but not the quarter table, and the difference between their totals would itself be a derivable count.
 
 **Values shown next to a total are checked against it.** Outcome flags (`pipeline/outcomes.ts`) are suppressed when the shown grand total minus the count is 1 to k-1. The days-to-safety-plan sample size (`pipeline/stats.ts`) gets the same check against its quarter's shown total.
 
@@ -46,9 +51,17 @@ One more relationship comes from the schema itself. Every record with a days val
 
 Otherwise these values are independent: no combined total is shown alongside them, so there's no margin among them to protect.
 
-**Enforcement.** `runPipeline` runs `findSuppressionViolations` on every table it builds and **throws if any violation is found**, before anything is labelled or returned. The audit sees only the published values, the same as an attacker would.
+**Enforcement.** `runPipeline` runs `findSuppressionViolations` on every table it builds, then the cross-table check, and **throws if any violation is found**, before anything is labelled or returned. The audit sees only the published values, the same as an attacker would. There's no automatic fix for a cross-table failure; the pipeline fails closed. In testing it has never fired: 12,000 randomized runs (k from 3 to 20, 15 to 546 records) found no hidden value recoverable across tables once each table was safe on its own.
 
-**Known limitation.** Every line is checked on its own. That catches everything a viewer can derive from a single row, column or set of totals, but it isn't a full linear-programming audit over *combinations* of lines. In principle, stacking several equations across rows and columns can narrow a hidden value further than any one line can. Solving that in general is a harder problem, which is why statistical agencies use dedicated tools such as τ-ARGUS. It's an open item for statistician review before real data is used (see `docs/DECISIONS.md`).
+**Error messages never carry a value.** A violation names where and which rule, never the number. These messages reach logs, and the dashboard shows its own on the page. A message quoting the small count it had just rejected would publish it anyway.
+
+**Known limitations.** A second review found that checking each line on its own missed real leaks. In 59 of 3,000 randomized runs, a hidden value could be worked out exactly by combining several lines, including a count of 7 at k=11. The combination check above closes that, with a regression test built from one of those tables. What's still not covered:
+
+- **Ranges.** The rules stop exact values and small exact sums. A viewer can still narrow a hidden value to a range, e.g. "between 1 and 10" when two hidden cells add up to 11. That's by design here, but a statistician may want a minimum protection range.
+- **Weighted combinations.** Within a table, each line is used once in a combination. Combinations that use a line twice aren't searched, and neither are the inequalities that hidden values being at least 1 adds. For these tables, any value an equation pins down exactly also shows up in a combination that uses each line once, and the exact cross-table check covers the same ground again.
+- **Across tables**, only exact recovery is checked, not small sums.
+
+A general audit of all of this is the kind of problem statistical agencies use dedicated tools such as τ-ARGUS for. It stays an open item for statistician review before real data is used (see `docs/DECISIONS.md`).
 
 **Utility.** On a sparse table this over-suppresses, sometimes heavily: most of a 60-record dataset spread over 4 quarters × 6 regions × 6 abuse types ends up suppressed. That's the safe direction to fail in. On the 5,000-record dashboard dataset nothing is suppressed. `tests/suppression.test.ts` also checks that a realistically sized table with one small cell doesn't collapse.
 
@@ -75,15 +88,17 @@ The schema (`schema/intakeRecord.ts`) accepts only a `region` (a closed enum, ne
 Three layers:
 
 - **The pipeline** audits every table and refuses to emit anything that fails (rule 2).
-- **The dashboard re-checks the data file before rendering** (`dashboard/validate.ts`). It rejects the file outright if any of these hold:
-  - the data isn't labelled synthetic;
+- **The dashboard re-checks the data file before rendering** (`dashboard/validate.ts`). It runs the same disclosure audit as the pipeline, from `shared/`, and rejects the file outright if any of these hold:
+  - the data isn't labelled synthetic, or its as-of date isn't a real calendar day;
   - the threshold isn't an integer of at least 2, or differs between tables;
   - any shown count is from 1 to k-1;
+  - any combination of lines gives a hidden value away;
+  - the tables' shared totals don't match, or combining the tables recovers a hidden value;
   - a median appears without a publishable sample size;
   - anything is the wrong shape.
 
-  It rebuilds every object from known fields only, so an unexpected field in the file (a record-shaped object, say) never reaches the renderer. This guards against a stale, hand-edited or tampered file. The full disclosure audit stays in the pipeline, since the dashboard can't import it.
-- **The dashboard has no code path to record-level data.** `dashboard/types.ts` is a local copy of the JSON contract; nothing in `dashboard/` imports `schema/`, `generator/` or `pipeline/`. Trade-off: that copy has to be kept in sync by hand. `tests/pipeline.test.ts`'s exact-keys test and `tests/dashboard-validate.test.ts`, which runs real pipeline output through the guard, are the tripwires.
+  It rebuilds every object from known fields only, so an unexpected field in the file (a record-shaped object, say) never reaches the renderer. This guards against a stale, hand-edited or tampered file, including one written by an older version of the pipeline with weaker rules. Its error message is shown on the page, so it never quotes a value from the file.
+- **The dashboard has no code path to record-level data.** `dashboard/types.ts` is a local copy of the JSON contract. The dashboard build compiles only `dashboard/` and `shared/`, and neither imports `schema/`, `generator/` or `pipeline/`; `tests/boundary.test.ts` enforces that. Trade-off: that copy has to be kept in sync by hand. `tests/pipeline.test.ts`'s exact-keys test and `tests/dashboard-validate.test.ts`, which runs real pipeline output through the guard, are the tripwires.
 
 The page also sets a strict **Content-Security-Policy**: same-origin scripts, styles and data only, and no inline script. It sets **`referrer: no-referrer`** too, so following a link off the page doesn't tell another site where the visitor came from. All rendering uses `textContent`, never `innerHTML`.
 
@@ -104,7 +119,7 @@ The page also sets a strict **Content-Security-Policy**: same-origin scripts, st
 
 ## What this does *not* cover yet
 
-- No real k-anonymity/suppression review by a statistician, including the multi-line limitation above.
+- No real k-anonymity/suppression review by a statistician, including the known limitations above.
 - No review against the actual VAWA/FVPSA/VOCA confidentiality requirements beyond the structural rules above (region/quarter only, no free text). That's a legal and compliance review, which code review can't substitute for.
 - No threat modeling for re-identification by linking to outside datasets (e.g. a public incident report that narrows a quarter+region combination further).
 - No protection against identifying a *program*. If one program serves a whole region, that region's numbers are that program's caseload. That discloses something about an organization, not a person, but it's still a disclosure. Region design has to account for it (see `docs/DECISIONS.md`, Region definitions).

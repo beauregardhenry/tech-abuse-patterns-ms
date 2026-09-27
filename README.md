@@ -20,6 +20,7 @@ Read `docs/PRIVACY.md` for how the privacy rules (suppressing small counts, prot
 /schema        intake record definition + validation (zod)
 /generator     seeded synthetic data generator
 /pipeline      aggregation + suppression (the privacy-critical core)
+/shared        the disclosure rules, used by both the pipeline and the dashboard's own check
 /dashboard     front end; consumes suppressed aggregates only, never raw records
 /scripts       build-time scripts (e.g. generating the dashboard's data file)
 /tests         vitest suite — privacy/suppression tests are the priority
@@ -37,7 +38,7 @@ npm install
 ## Running
 
 ```
-npm run build           # typecheck + compile schema/generator/pipeline/scripts to dist/
+npm run build           # typecheck + compile schema/generator/pipeline/shared/scripts to dist/
 npm test                # run the full test suite (privacy/suppression tests included)
 npm run build:data      # generate a fresh synthetic dataset -> dashboard/data/aggregates.SYNTHETIC.json
 npm run build:dashboard # compile the browser-side dashboard TypeScript into dashboard/js/
@@ -59,9 +60,11 @@ Per working practice, the privacy rules are the highest-priority area and are te
 - `tests/generator.test.ts`: the generator is deterministic for a given seed.
 - `tests/suppression.test.ts` and `tests/pipeline.test.ts`:
   - no shown count below k;
-  - no hidden value recoverable by subtraction, totals included;
-  - totals shared between tables stay consistent;
+  - no hidden value recoverable by any combination of rows and columns, totals included;
+  - totals shared between tables stay consistent, and combining the tables recovers nothing;
   - input is validated at the pipeline boundary;
   - every output is labelled synthetic;
   - no record-level data reaches the rendering layer.
-- `tests/dashboard-validate.test.ts`: the dashboard refuses a tampered data file.
+- `tests/linked.test.ts`: the exact cross-table check.
+- `tests/dashboard-validate.test.ts`: the dashboard runs the same audit and refuses a tampered data file.
+- `tests/boundary.test.ts`: the dashboard and `shared/` never import record-level code.
