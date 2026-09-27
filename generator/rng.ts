@@ -29,12 +29,18 @@ export class Rng {
     return items[this.nextInt(items.length)]!;
   }
 
-  // Weighted pick: weights need not sum to 1.
+  // Weighted pick: weights need not sum to 1, but must be finite, non-negative, and not all zero.
   weightedPick<T>(items: readonly T[], weights: readonly number[]): T {
     if (items.length !== weights.length || items.length === 0) {
       throw new Error("items and weights must be non-empty and equal length");
     }
+    if (weights.some((w) => !Number.isFinite(w) || w < 0)) {
+      throw new Error("weights must be finite and non-negative");
+    }
     const total = weights.reduce((sum, w) => sum + w, 0);
+    if (total === 0) {
+      throw new Error("at least one weight must be positive");
+    }
     let roll = this.next() * total;
     for (let i = 0; i < items.length; i++) {
       roll -= weights[i]!;

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S npx tsx
 // Test coverage only ratchets one way. This measures line coverage over
-// schema/, generator/, pipeline/, and dashboard/validate.ts (see
+// schema/, generator/, pipeline/, shared/, and dashboard/validate.ts (see
 // vitest.config.ts's `include`) and fails when it slips below the number
 // recorded in coverage-baseline.txt, so a change that adds untested code has
 // to say so out loud instead of quietly diluting the suite.

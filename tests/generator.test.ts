@@ -59,6 +59,26 @@ describe("generateIntakeRecords", () => {
   });
 });
 
+describe("generateIntakeRecords — config validation", () => {
+  const base: GenerateConfig = { seed: 1, quarters: ["2025-Q1"], totalRecords: 10 };
+
+  it("rejects configs that would silently produce garbage", () => {
+    expect(() => generateIntakeRecords({ ...base, quarters: [] })).toThrow(/quarters/);
+    expect(() => generateIntakeRecords({ ...base, quarters: ["Q1 2025"] })).toThrow(/quarters/);
+    expect(() => generateIntakeRecords({ ...base, totalRecords: -1 })).toThrow(/totalRecords/);
+    expect(() => generateIntakeRecords({ ...base, totalRecords: 2.5 })).toThrow(/totalRecords/);
+    expect(() => generateIntakeRecords({ ...base, outcomeRates: { safety_plan: 1.5 } })).toThrow(/outcome rates/);
+    expect(() => generateIntakeRecords({ ...base, daysToSafetyPlan: { meanDays: 5, missingRate: 2 } })).toThrow(/daysToSafetyPlan/);
+  });
+
+  it("rejects negative, non-finite or all-zero weights instead of skewing the draw", () => {
+    expect(() => generateIntakeRecords({ ...base, regionWeights: { "Region A": -1 } })).toThrow(/non-negative/);
+    expect(() => generateIntakeRecords({ ...base, regionWeights: { "Region A": Number.NaN } })).toThrow(/finite/);
+    const allZero = { "Region A": 0, "Region B": 0, "Region C": 0, "Region D": 0, "Region E": 0, "Region F": 0 };
+    expect(() => generateIntakeRecords({ ...base, regionWeights: allZero })).toThrow(/positive/);
+  });
+});
+
 describe("generator fixtures", () => {
   it("sparseRegionFixture contains a genuine zero cell alongside populated cells", () => {
     const records = sparseRegionFixture();

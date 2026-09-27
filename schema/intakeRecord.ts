@@ -44,7 +44,7 @@ export const REGIONS = ["Region A", "Region B", "Region C", "Region D", "Region 
 
 export const OUTCOMES = ["safety_plan", "evidence_preserved", "protective_order_filed"] as const;
 
-const QUARTER_PATTERN = /^\d{4}-Q[1-4]$/;
+export const QUARTER_PATTERN = /^\d{4}-Q[1-4]$/;
 
 // Upper bound on days_to_safety_plan. A placeholder pending partner input (see
 // docs/DECISIONS.md): it rejects garbage like 100000 at intake, so a single malformed record can't

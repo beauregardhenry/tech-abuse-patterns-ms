@@ -2,7 +2,7 @@ import {
   ABUSE_TYPES,
   MAX_DAYS_TO_SAFETY_PLAN,
   OUTCOMES,
-  PLATFORMS,
+  QUARTER_PATTERN,
   REGIONS,
   type AbuseType,
   type FindingDetail,
@@ -81,7 +81,25 @@ function weightsForQuarter(
   return { types: [...byType.keys()], weights: [...byType.values()] };
 }
 
+function validateConfig(config: GenerateConfig): void {
+  if (config.quarters.length === 0 || config.quarters.some((q) => !QUARTER_PATTERN.test(q))) {
+    throw new Error("quarters must be a non-empty list of YYYY-Qn labels");
+  }
+  if (!Number.isInteger(config.totalRecords) || config.totalRecords < 0) {
+    throw new Error("totalRecords must be a non-negative integer");
+  }
+  const rates = Object.values(config.outcomeRates ?? {});
+  if (rates.some((p) => !Number.isFinite(p) || p < 0 || p > 1)) {
+    throw new Error("outcome rates must be probabilities between 0 and 1");
+  }
+  const days = config.daysToSafetyPlan;
+  if (days && (!Number.isFinite(days.meanDays) || days.meanDays < 0 || !(days.missingRate >= 0 && days.missingRate <= 1))) {
+    throw new Error("daysToSafetyPlan needs a non-negative mean and a missing rate between 0 and 1");
+  }
+}
+
 export function generateIntakeRecords(config: GenerateConfig): IntakeRecord[] {
+  validateConfig(config);
   const rng = new Rng(config.seed);
   const regionEntries = REGIONS.map((r) => [r, config.regionWeights?.[r] ?? 1] as const);
   const regionNames = regionEntries.map(([r]) => r);
@@ -97,7 +115,7 @@ export function generateIntakeRecords(config: GenerateConfig): IntakeRecord[] {
     const abuse_type = rng.weightedPick(types, weights);
     const region = rng.weightedPick(regionNames, regionWeights);
     const finding_detail = rng.pick(ABUSE_TYPE_FINDING_DETAILS[abuse_type]);
-    const platform = rng.pick(ABUSE_TYPE_PLATFORMS[abuse_type] ?? PLATFORMS);
+    const platform = rng.pick(ABUSE_TYPE_PLATFORMS[abuse_type]);
 
     const outcome = OUTCOMES.filter((o) => rng.chance(outcomeRates[o] ?? 0));
 
