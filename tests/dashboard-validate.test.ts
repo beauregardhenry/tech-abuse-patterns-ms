@@ -46,6 +46,32 @@ describe("validatePayload — the dashboard's pre-render guard", () => {
     }
   });
 
+  it("never quotes a rejected value in its error, since the error is shown on the page", () => {
+    const p = payload();
+    p.data.abuseTypeByRegion.cells[0]![0] = 7;
+    expect(() => validatePayload(p)).toThrow(/^(?!.*\b7\b).*below k=11/);
+  });
+
+  it("runs the full disclosure audit, not just the small-count check", () => {
+    // Row "spyware" of the by-quarter table with exactly one value hidden: every shown number clears
+    // k, but the hidden one is its row total minus the rest.
+    const p = payload();
+    p.data.abuseTypeByQuarter.cells[0]![0] = null;
+    expect(() => validatePayload(p)).toThrow(/recoverable/);
+  });
+
+  it("rejects tables whose shared totals don't line up", () => {
+    const p = payload();
+    p.data.abuseTypeByRegion.rowLabels[0] = "renamed";
+    expect(() => validatePayload(p)).toThrow(/does not have the same rows/);
+  });
+
+  it("rejects an as-of date that isn't a real calendar day", () => {
+    const p = payload();
+    p.dataAsOf = "2025-02-30";
+    expect(() => validatePayload(p)).toThrow(/dataAsOf/);
+  });
+
   it("rejects a lowered or inconsistent threshold", () => {
     const lowered = payload();
     lowered.data.suppressionThreshold = 1;
